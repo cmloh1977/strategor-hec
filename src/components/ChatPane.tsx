@@ -105,13 +105,77 @@ function parsePopulateCommand(text: string): {
   return { pillar, points: points.slice(0, 8), cleanText };
 }
 
-const MODULE_GREETINGS: Record<string, string> = {
-  "business-model": "Welcome! I'm your **Thinking Partner**. Before we dive into any analysis, let's first build a crystal-clear picture of your chosen business model.\n\nOn the left, you can see the **3 pillars** from the Odyssey 3.14 framework that define any business model:\n\n- 🎯 **Value Proposition** — *Who* are your customers? *What* products/services do you offer? At *what price*?\n- ⚙️ **Value Architecture** — *How* do you deliver that value? What's your value chain, who are your partners, what resources and competencies do you rely on?\n- 📊 **Contributions** — What is the resulting performance? *Financial, environmental, and societal.*\n\nLet's start with the first pillar. Tell me: **Which company or business unit are you analyzing**, and what does it fundamentally do?",
-  "external-analysis": "Welcome back. Now let's shift our lens **outward**.\n\nWe'll use **Porter's 5 Forces** framework to map the competitive forces shaping your industry.\n\nIn broad terms, *which industry does your chosen company operate in?*",
-  "internal-analysis": "Good to see you again. Now let's look **inward**.\n\nWe'll apply the **VRIO framework** to evaluate your company's key resources and capabilities.\n\n*What do you believe is your company's single most important resource or capability?*",
-  "swot-synthesis": "Welcome to the **Synthesis** phase. It's time to bring everything together.\n\nBased on your external and internal analyses, let's construct a comprehensive **SWOT**.\n\n*What stood out to you most from your previous work?*",
-  "strategic-options": "This is the **final stretch**. With your SWOT complete, it's time to formulate strategic options aligned with the company's *Long-Term Strategic Vision*.\n\n**What is the single biggest opportunity you identified?**",
-};
+// ── Dynamic greeting builder that incorporates prior module context ──
+function buildGreeting(moduleId: string, bm: any, ff: any, vr: any, sw: any): string {
+  // Helper to summarize a pillar's populated points
+  const summarize = (pillar: any) => pillar?.populated ? pillar.points.join("; ") : null;
+
+  // Build a brief recap of what's been established
+  const bmSummary: string[] = [];
+  if (bm?.valueProposition?.populated) bmSummary.push(`**Value Proposition:** ${summarize(bm.valueProposition)}`);
+  if (bm?.valueArchitecture?.populated) bmSummary.push(`**Value Architecture:** ${summarize(bm.valueArchitecture)}`);
+  if (bm?.contributions?.populated) bmSummary.push(`**Contributions:** ${summarize(bm.contributions)}`);
+  const hasBM = bmSummary.length > 0;
+
+  const ffSummary: string[] = [];
+  if (ff?.newEntrants?.populated) ffSummary.push(`New Entrants: ${summarize(ff.newEntrants)}`);
+  if (ff?.suppliers?.populated) ffSummary.push(`Suppliers: ${summarize(ff.suppliers)}`);
+  if (ff?.rivalry?.populated) ffSummary.push(`Rivalry: ${summarize(ff.rivalry)}`);
+  if (ff?.buyers?.populated) ffSummary.push(`Buyers: ${summarize(ff.buyers)}`);
+  if (ff?.substitutes?.populated) ffSummary.push(`Substitutes: ${summarize(ff.substitutes)}`);
+  const hasFF = ffSummary.length > 0;
+
+  const vrSummary: string[] = [];
+  if (vr?.valuable?.populated) vrSummary.push(`Valuable: ${summarize(vr.valuable)}`);
+  if (vr?.rare?.populated) vrSummary.push(`Rare: ${summarize(vr.rare)}`);
+  if (vr?.inimitable?.populated) vrSummary.push(`Inimitable: ${summarize(vr.inimitable)}`);
+  if (vr?.organized?.populated) vrSummary.push(`Organized: ${summarize(vr.organized)}`);
+  const hasVR = vrSummary.length > 0;
+
+  switch (moduleId) {
+    case "business-model":
+      return "Welcome! I'm your **Thinking Partner**. Before we dive into any analysis, let's first build a crystal-clear picture of your chosen business model.\n\nOn the left, you can see the **3 pillars** from the Odyssey 3.14 framework that define any business model:\n\n- 🎯 **Value Proposition** — *Who* are your customers? *What* products/services do you offer? At *what price*?\n- ⚙️ **Value Architecture** — *How* do you deliver that value? What's your value chain, who are your partners, what resources and competencies do you rely on?\n- 📊 **Contributions** — What is the resulting performance? *Financial, environmental, and societal.*\n\nLet's start with the first pillar. Tell me: **Which company or business unit are you analyzing**, and what does it fundamentally do?";
+
+    case "external-analysis":
+      if (hasBM) {
+        return `Welcome back! Great work on the **Business Model** — here's what we established:\n\n${bmSummary.map(s => `- ${s}`).join("\n")}\n\nNow let's shift our lens **outward** and apply **Porter's 5 Forces** framework to understand the competitive dynamics around this business.\n\nBased on what you've described, *let's start with the first force:* **Threat of New Entrants.** How easy is it for a new competitor to enter this market? What are the main barriers to entry?`;
+      }
+      return "Welcome back. Now let's shift our lens **outward**.\n\nWe'll use **Porter's 5 Forces** framework to map the competitive forces shaping your industry.\n\nIn broad terms, *which industry does your chosen company operate in?*";
+
+    case "internal-analysis":
+      if (hasBM) {
+        const recap = hasBM ? `\n\nFrom your **Business Model**, we know:\n${bmSummary.map(s => `- ${s}`).join("\n")}` : "";
+        const ffRecap = hasFF ? `\n\nFrom your **External Analysis (5 Forces):**\n${ffSummary.map(s => `- ${s}`).join("\n")}` : "";
+        return `Good to see you again. Now let's look **inward** and evaluate your key resources using the **VRIO framework**.${recap}${ffRecap}\n\nBased on this context, *what do you believe is your company's single most important resource or capability?*`;
+      }
+      return "Good to see you again. Now let's look **inward**.\n\nWe'll apply the **VRIO framework** to evaluate your company's key resources and capabilities.\n\n*What do you believe is your company's single most important resource or capability?*";
+
+    case "swot-synthesis":
+      if (hasFF || hasVR) {
+        let context = "Welcome to the **Synthesis** phase. Based on your previous work, here's what we have:\n";
+        if (hasFF) context += `\n**External (5 Forces):**\n${ffSummary.map(s => `- ${s}`).join("\n")}`;
+        if (hasVR) context += `\n\n**Internal (VRIO):**\n${vrSummary.map(s => `- ${s}`).join("\n")}`;
+        context += "\n\nNow let's synthesize these into a **SWOT**. Looking at the external picture, *what would you say are the strongest opportunities for this business?*";
+        return context;
+      }
+      return "Welcome to the **Synthesis** phase. It's time to bring everything together.\n\nBased on your external and internal analyses, let's construct a comprehensive **SWOT**.\n\n*What stood out to you most from your previous work?*";
+
+    case "strategic-options": {
+      const hasSW = sw?.strengths?.populated || sw?.weaknesses?.populated || sw?.opportunities?.populated || sw?.threats?.populated;
+      if (hasSW) {
+        const swParts: string[] = [];
+        if (sw?.strengths?.populated) swParts.push(`**Strengths:** ${summarize(sw.strengths)}`);
+        if (sw?.weaknesses?.populated) swParts.push(`**Weaknesses:** ${summarize(sw.weaknesses)}`);
+        if (sw?.opportunities?.populated) swParts.push(`**Opportunities:** ${summarize(sw.opportunities)}`);
+        if (sw?.threats?.populated) swParts.push(`**Threats:** ${summarize(sw.threats)}`);
+        return `This is the **final stretch**. Here's your completed SWOT:\n\n${swParts.map(s => `- ${s}`).join("\n")}\n\nWith this in mind, *what is the single biggest opportunity you want to capitalize on?*`;
+      }
+      return "This is the **final stretch**. With your SWOT complete, it's time to formulate strategic options aligned with the company's *Long-Term Strategic Vision*.\n\n**What is the single biggest opportunity you identified?**";
+    }
+    default:
+      return "Welcome! I'm your **Thinking Partner**. Tell me about the company you're analyzing.";
+  }
+}
 
 export default function ChatPane({ moduleId }: { moduleId: string }) {
   const diagramCtx = useDiagram();
@@ -120,15 +184,13 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     businessModel, fiveForces, vrio, swot, options
   } = diagramCtx;
   
-  const defaultMessages: Message[] = [
-    {
-      id: "1",
-      role: "coach",
-      text: MODULE_GREETINGS[moduleId] || MODULE_GREETINGS["business-model"],
-    }
-  ];
+  const buildDefault = useCallback(() => [{
+    id: "1",
+    role: "coach" as const,
+    text: buildGreeting(moduleId, businessModel, fiveForces, vrio, swot),
+  }], [moduleId, businessModel, fiveForces, vrio, swot]);
 
-  const [messages, setMessages] = useState<Message[]>(defaultMessages);
+  const [messages, setMessages] = useState<Message[]>(buildDefault());
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [pendingPopulate, setPendingPopulate] = useState<{
@@ -144,7 +206,7 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     if (saved && saved.length > 0) {
       setMessages(saved);
     } else {
-      setMessages(defaultMessages);
+      setMessages(buildDefault());
     }
     setPendingPopulate(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
