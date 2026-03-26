@@ -40,7 +40,7 @@ export default function JourneyLayout({ children }: { children: React.ReactNode 
             <Zap className="h-6 w-6 text-red-600 mr-3" />
             <h2 className="font-bold text-lg text-slate-800 tracking-tight flex items-center">
               Strategy Coach
-              <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-slate-200">v1.0</span>
+              <span className="ml-2 bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-indigo-100">v1.0-hec</span>
             </h2>
           </div>
           
