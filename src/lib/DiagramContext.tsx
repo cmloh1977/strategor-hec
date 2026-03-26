@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 
 export interface PillarData {
   points: string[];
@@ -103,6 +103,26 @@ const INIT_OPT: StrategicOptionsState = {
   option3: emptyPillar,
 };
 
+// ── localStorage helpers ──
+
+const STORAGE_KEY = "strategor_diagram_state";
+
+function loadFromStorage() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+function saveToStorage(data: object) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {}
+}
+
 // ── Context Creation ──
 
 const DiagramContext = createContext<DiagramContextType | null>(null);
@@ -113,6 +133,27 @@ export function DiagramProvider({ children }: { children: ReactNode }) {
   const [vrio, setVrio] = useState<VrioState>(INIT_VRIO);
   const [swot, setSwot] = useState<SwotState>(INIT_SWOT);
   const [options, setOptions] = useState<StrategicOptionsState>(INIT_OPT);
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    const saved = loadFromStorage();
+    if (saved) {
+      if (saved.businessModel) setBusinessModel(saved.businessModel);
+      if (saved.fiveForces) setFiveForces(saved.fiveForces);
+      if (saved.vrio) setVrio(saved.vrio);
+      if (saved.swot) setSwot(saved.swot);
+      if (saved.options) setOptions(saved.options);
+    }
+  }, []);
+
+  // Persist to localStorage whenever any state changes
+  const persist = useCallback(() => {
+    saveToStorage({ businessModel, fiveForces, vrio, swot, options });
+  }, [businessModel, fiveForces, vrio, swot, options]);
+
+  useEffect(() => {
+    persist();
+  }, [persist]);
 
   const populateBusinessModel = (p: keyof BusinessModelState, pts: string[]) => {
     setBusinessModel(prev => ({ ...prev, [p]: { points: pts, populated: true } }));
@@ -150,3 +191,4 @@ export const useDiagram = () => {
   if (!context) throw new Error("useDiagram must be used within DiagramProvider");
   return context;
 };
+
