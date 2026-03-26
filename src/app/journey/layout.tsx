@@ -34,13 +34,13 @@ export default function JourneyLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col justify-between shadow-sm z-10">
+      <aside className="w-72 bg-white border-r border-amber-200 flex flex-col justify-between shadow-sm z-10">
         <div>
           <div className="h-16 flex items-center px-6 border-b border-slate-100 mb-6 relative">
             <Zap className="h-6 w-6 text-red-600 mr-3" />
             <h2 className="font-bold text-lg text-slate-800 tracking-tight flex items-center">
               Strategy Coach
-              <span className="ml-2 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-slate-200">v1.0</span>
+              <span className="ml-2 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-amber-200">v2.0dev</span>
             </h2>
           </div>
           
@@ -78,7 +78,7 @@ export default function JourneyLayout({ children }: { children: React.ReactNode 
           </div>
           <button
             onClick={() => { logout(); router.push("/"); }}
-            className="flex w-full items-center justify-center space-x-2 rounded-lg bg-white border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-red-600"
+            className="flex w-full items-center justify-center space-x-2 rounded-lg bg-white border border-amber-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-red-600"
           >
             <LogOut className="h-4 w-4" />
             <span>Sign Out</span>
