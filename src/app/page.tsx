@@ -53,7 +53,7 @@ export default function Home() {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-600 ring-8 ring-white">
               <Shield className="h-8 w-8" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">HEC Strategy Coach</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">GALP Strategy Coach</h1>
             <p className="mt-2 text-sm text-slate-500">Master Strategic Analysis before Paris.</p>
           </div>
 
@@ -73,7 +73,7 @@ export default function Home() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-                  placeholder="your.name@hec.edu"
+                  placeholder="your.name@toyota-tsusho.com"
                 />
               </div>
               <div>
