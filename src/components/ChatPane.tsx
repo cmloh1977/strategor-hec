@@ -1,10 +1,29 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Bot, User } from "lucide-react";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import { useDiagram } from "@/lib/DiagramContext";
+
+// ── localStorage helpers for chat persistence ──
+const CHAT_STORAGE_PREFIX = "strategor_chat_";
+
+function loadChatMessages(moduleId: string) {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_PREFIX + moduleId);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+function saveChatMessages(moduleId: string, messages: any[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CHAT_STORAGE_PREFIX + moduleId, JSON.stringify(messages));
+  } catch {}
+}
 
 interface Message {
   id: string;
@@ -95,17 +114,21 @@ const MODULE_GREETINGS: Record<string, string> = {
 };
 
 export default function ChatPane({ moduleId }: { moduleId: string }) {
+  const diagramCtx = useDiagram();
   const { 
-    populateBusinessModel, populateFiveForces, populateVrio, populateSwot, populateOptions 
-  } = useDiagram();
+    populateBusinessModel, populateFiveForces, populateVrio, populateSwot, populateOptions,
+    businessModel, fiveForces, vrio, swot, options
+  } = diagramCtx;
   
-  const [messages, setMessages] = useState<Message[]>([
+  const defaultMessages: Message[] = [
     {
       id: "1",
       role: "coach",
       text: MODULE_GREETINGS[moduleId] || MODULE_GREETINGS["business-model"],
     }
-  ]);
+  ];
+
+  const [messages, setMessages] = useState<Message[]>(defaultMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [pendingPopulate, setPendingPopulate] = useState<{
@@ -114,6 +137,27 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     messageId: string;
   } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Hydrate chat messages from localStorage on mount / module switch
+  useEffect(() => {
+    const saved = loadChatMessages(moduleId);
+    if (saved && saved.length > 0) {
+      setMessages(saved);
+    } else {
+      setMessages(defaultMessages);
+    }
+    setPendingPopulate(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleId]);
+
+  // Persist chat messages to localStorage on every update
+  const persistMessages = useCallback(() => {
+    saveChatMessages(moduleId, messages);
+  }, [moduleId, messages]);
+
+  useEffect(() => {
+    persistMessages();
+  }, [persistMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -129,7 +173,11 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updatedMessages, moduleId }),
+        body: JSON.stringify({
+          messages: updatedMessages,
+          moduleId,
+          diagramState: { businessModel, fiveForces, vrio, swot, options },
+        }),
       });
       
       if (!response.ok) throw new Error('API Error');

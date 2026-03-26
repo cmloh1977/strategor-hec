@@ -80,7 +80,7 @@ Guide users to formulate strategic options aligned with the company's long-term 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, moduleId } = body;
+    const { messages, moduleId, diagramState } = body;
 
     if (!messages || !Array.isArray(messages)) {
         return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
@@ -93,6 +93,70 @@ export async function POST(req: Request) {
     else if (moduleId === "swot-synthesis") validPillars = "strengths, weaknesses, opportunities, threats";
     else if (moduleId === "strategic-options") validPillars = "option1, option2, option3";
 
+    // Build a context summary from prior modules so the AI has continuity
+    let priorContext = "";
+    if (diagramState) {
+      const sections: string[] = [];
+      
+      // Business Model
+      const bm = diagramState.businessModel;
+      if (bm) {
+        const bmParts: string[] = [];
+        if (bm.valueProposition?.populated) bmParts.push(`  - Value Proposition: ${bm.valueProposition.points.join("; ")}`);
+        if (bm.valueArchitecture?.populated) bmParts.push(`  - Value Architecture: ${bm.valueArchitecture.points.join("; ")}`);
+        if (bm.contributions?.populated) bmParts.push(`  - Contributions: ${bm.contributions.points.join("; ")}`);
+        if (bmParts.length > 0) sections.push(`**Business Model (completed):**\n${bmParts.join("\n")}`);
+      }
+      
+      // 5 Forces
+      const ff = diagramState.fiveForces;
+      if (ff) {
+        const ffParts: string[] = [];
+        if (ff.newEntrants?.populated) ffParts.push(`  - New Entrants: ${ff.newEntrants.points.join("; ")}`);
+        if (ff.suppliers?.populated) ffParts.push(`  - Suppliers: ${ff.suppliers.points.join("; ")}`);
+        if (ff.rivalry?.populated) ffParts.push(`  - Industry Rivalry: ${ff.rivalry.points.join("; ")}`);
+        if (ff.buyers?.populated) ffParts.push(`  - Buyers: ${ff.buyers.points.join("; ")}`);
+        if (ff.substitutes?.populated) ffParts.push(`  - Substitutes: ${ff.substitutes.points.join("; ")}`);
+        if (ffParts.length > 0) sections.push(`**External Analysis - 5 Forces (completed):**\n${ffParts.join("\n")}`);
+      }
+
+      // VRIO
+      const vr = diagramState.vrio;
+      if (vr) {
+        const vrParts: string[] = [];
+        if (vr.valuable?.populated) vrParts.push(`  - Valuable: ${vr.valuable.points.join("; ")}`);
+        if (vr.rare?.populated) vrParts.push(`  - Rare: ${vr.rare.points.join("; ")}`);
+        if (vr.inimitable?.populated) vrParts.push(`  - Inimitable: ${vr.inimitable.points.join("; ")}`);
+        if (vr.organized?.populated) vrParts.push(`  - Organized: ${vr.organized.points.join("; ")}`);
+        if (vrParts.length > 0) sections.push(`**Internal Analysis - VRIO (completed):**\n${vrParts.join("\n")}`);
+      }
+
+      // SWOT
+      const sw = diagramState.swot;
+      if (sw) {
+        const swParts: string[] = [];
+        if (sw.strengths?.populated) swParts.push(`  - Strengths: ${sw.strengths.points.join("; ")}`);
+        if (sw.weaknesses?.populated) swParts.push(`  - Weaknesses: ${sw.weaknesses.points.join("; ")}`);
+        if (sw.opportunities?.populated) swParts.push(`  - Opportunities: ${sw.opportunities.points.join("; ")}`);
+        if (sw.threats?.populated) swParts.push(`  - Threats: ${sw.threats.points.join("; ")}`);
+        if (swParts.length > 0) sections.push(`**SWOT Synthesis (completed):**\n${swParts.join("\n")}`);
+      }
+
+      // Strategic Options
+      const opt = diagramState.options;
+      if (opt) {
+        const optParts: string[] = [];
+        if (opt.option1?.populated) optParts.push(`  - Option 1: ${opt.option1.points.join("; ")}`);
+        if (opt.option2?.populated) optParts.push(`  - Option 2: ${opt.option2.points.join("; ")}`);
+        if (opt.option3?.populated) optParts.push(`  - Option 3: ${opt.option3.points.join("; ")}`);
+        if (optParts.length > 0) sections.push(`**Strategic Options (completed):**\n${optParts.join("\n")}`);
+      }
+
+      if (sections.length > 0) {
+        priorContext = `\n\n## PRIOR MODULE INSIGHTS\nThe user has already completed parts of their strategic analysis. Here is a summary of what they have established so far. Use this context to maintain analytical consistency and build upon their previous work:\n\n${sections.join("\n\n")}`;
+      }
+    }
+
     // Convert chat history format to the format expected by GoogleGenAI
     const formattedHistory = messages.map((m: any) => ({
       role: m.role === 'coach' ? 'model' : 'user',
@@ -101,10 +165,10 @@ export async function POST(req: Request) {
     const activeModuleHint = `\n\n## ACTIVE MODULE\nThe user is currently in the "${moduleId || 'business-model'}" module. Apply ONLY the coaching behavior for this specific module as described above. Do NOT jump ahead to other modules.\n\nCRITICAL: The valid segment names for the current module are exactly: ${validPillars}. YOU MUST USE ONE OF THESE EXACT STRINGS FOR THE [POPULATE:xyz] command.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash',
       contents: formattedHistory,
       config: {
-        systemInstruction: BASE_SYSTEM_PROMPT + activeModuleHint,
+        systemInstruction: BASE_SYSTEM_PROMPT + priorContext + activeModuleHint,
         temperature: 0.7,
       }
     });
