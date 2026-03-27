@@ -309,30 +309,98 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
               <p className="text-xs text-slate-400 mt-1">Ask your team members for their Share Codes after they complete their analysis.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {teamCards.map((card) => (
-                <div key={card.shareCode} className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden group">
-                  <div className="h-2 w-full" style={{ background: card.color }} />
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-900">{card.businessName}</h4>
-                        <p className="text-[11px] text-slate-500">{card.ownerName} · {card.ownerRegion}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {teamCards.map((card) => {
+                // Derive compact insights
+                const vrioMet = [card.vrio.valuable, card.vrio.rare, card.vrio.inimitable, card.vrio.organized].filter(v => v?.populated).length;
+                const sCount = card.swot.strengths.points.length;
+                const wCount = card.swot.weaknesses.points.length;
+                const oCount = card.swot.opportunities.points.length;
+                const tCount = card.swot.threats.points.length;
+                const forceTotal = [card.fiveForces.newEntrants, card.fiveForces.suppliers, card.fiveForces.rivalry, card.fiveForces.buyers, card.fiveForces.substitutes]
+                  .reduce((s, f) => s + (f?.points?.length || 0), 0);
+                const pressure = forceTotal <= 5 ? "Low" : forceTotal <= 10 ? "Med" : "High";
+                const pressureColor = pressure === "High" ? "text-red-500" : pressure === "Med" ? "text-amber-500" : "text-emerald-500";
+
+                const bmDepth = [card.businessModel.valueProposition, card.businessModel.valueArchitecture, card.businessModel.contributions]
+                  .reduce((s, p) => s + (p?.points?.length || 0), 0);
+                const bmScore = Math.min(5, Math.round(bmDepth / 2));
+                const swotBalance = (sCount + oCount) - (wCount + tCount);
+                const healthScore = Math.min(100, Math.round(
+                  (bmScore / 5 * 25) + ((5 - Math.min(5, Math.round(forceTotal / 3))) / 5 * 20) + (vrioMet / 4 * 30) + (Math.max(0, Math.min(5, swotBalance + 3)) / 6 * 25)
+                ));
+                let grade: string, gradeColor: string;
+                if (healthScore >= 80) { grade = "A"; gradeColor = "#10b981"; }
+                else if (healthScore >= 65) { grade = "B"; gradeColor = "#3b82f6"; }
+                else if (healthScore >= 50) { grade = "C"; gradeColor = "#f59e0b"; }
+                else if (healthScore >= 35) { grade = "D"; gradeColor = "#f97316"; }
+                else { grade = "F"; gradeColor = "#ef4444"; }
+
+                return (
+                  <div key={card.shareCode} className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden group hover:shadow-md transition-shadow">
+                    <div className="h-1.5 w-full" style={{ background: card.color }} />
+                    <div className="p-4">
+                      {/* Header: Name + Grade */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-sm text-slate-900 truncate">{card.businessName}</h4>
+                          <p className="text-[11px] text-slate-400 truncate">{card.ownerName} · {card.ownerRegion}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-9 w-9 rounded-lg flex items-center justify-center text-sm font-black flex-shrink-0"
+                            style={{ backgroundColor: gradeColor + "18", border: `1.5px solid ${gradeColor}`, color: gradeColor }}
+                          >
+                            {grade}
+                          </div>
+                          <button
+                            onClick={() => removeTeamCard(card.shareCode)}
+                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => removeTeamCard(card.shareCode)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-slate-400">
-                      <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{card.shareCode}</span>
-                      <span>✓ Complete</span>
+
+                      {/* Insight Row */}
+                      <div className="flex items-center gap-3 text-[10px]">
+                        {/* VRIO dots */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-slate-400 font-medium">VRIO</span>
+                          {["V","R","I","O"].map((l, i) => (
+                            <div key={l} className={clsx(
+                              "h-4 w-4 rounded text-[8px] font-bold flex items-center justify-center",
+                              i < vrioMet ? "bg-emerald-100 text-emerald-700" : "bg-slate-50 text-slate-300"
+                            )}>{l}</div>
+                          ))}
+                        </div>
+
+                        <div className="h-3 w-px bg-slate-200" />
+
+                        {/* SWOT counts */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-emerald-600 font-bold">{sCount}S</span>
+                          <span className="text-red-400 font-bold">{wCount}W</span>
+                          <span className="text-blue-500 font-bold">{oCount}O</span>
+                          <span className="text-orange-400 font-bold">{tCount}T</span>
+                        </div>
+
+                        <div className="h-3 w-px bg-slate-200" />
+
+                        {/* Competitive pressure */}
+                        <span className={clsx("font-bold", pressureColor)}>
+                          {pressure === "High" ? "⬆" : pressure === "Med" ? "■" : "⬇"} {pressure}
+                        </span>
+                      </div>
+
+                      {/* Footer: share code */}
+                      <div className="mt-2 pt-2 border-t border-slate-50">
+                        <span className="font-mono text-[10px] text-slate-300">{card.shareCode}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
