@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Shield, ArrowRight, Loader2 } from "lucide-react";
 
 export default function Home() {
@@ -13,10 +13,12 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const hasRedirected = useRef(false);
 
   useEffect(() => {
-    if (!loading && user) {
-      router.push("/journey");
+    if (!loading && user && !hasRedirected.current) {
+      hasRedirected.current = true;
+      router.replace("/journey");
     }
   }, [user, loading, router]);
 
@@ -26,25 +28,17 @@ export default function Home() {
     setError("");
     try {
       await login(email, password);
-      // Let the useEffect handle the redirect
+      // onAuthStateChanged will fire → useEffect will redirect
     } catch (err: any) {
       setError(err.message || "Failed to log in.");
       setIsLoggingIn(false);
     }
   };
 
-  if (loading) {
+  // Show spinner while loading or already authenticated
+  if (loading || user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-10 w-10 animate-spin text-red-600" />
-      </div>
-    );
-  }
-
-  // Already authenticated — show spinner while redirect fires
-  if (user) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
         <Loader2 className="h-10 w-10 animate-spin text-red-600" />
       </div>
     );

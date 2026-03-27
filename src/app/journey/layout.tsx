@@ -4,10 +4,12 @@ import { useAuth } from "@/lib/AuthContext";
 import { PortfolioProvider, usePortfolio } from "@/lib/PortfolioContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { LogOut, LayoutDashboard, BookOpen, Compass, Layers, ShieldAlert, Lock, Zap, BarChart3, MessageSquare, Target } from "lucide-react";
+import { LogOut, LayoutDashboard, BookOpen, Compass, Layers, ShieldAlert, Lock, Zap, BarChart3, MessageSquare, Target, Settings } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
+
+const MASTER_EMAIL = "chee_ming_loh@toyota-tsusho.com";
 
 const ANALYSIS_STEPS = [
   { id: "business-model", name: "Business Model", icon: BookOpen },
@@ -123,8 +125,8 @@ function SidebarContent() {
       </div>
 
       {/* User Footer */}
-      <div className="p-4 border-t border-slate-100">
-        <div className="flex items-center mb-4 px-2">
+      <div className="p-4 border-t border-slate-100 space-y-2">
+        <div className="flex items-center mb-3 px-2">
           <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs mr-3">
             {user?.email?.charAt(0).toUpperCase()}
           </div>
@@ -132,8 +134,17 @@ function SidebarContent() {
             {user?.email}
           </div>
         </div>
+        {user?.email?.toLowerCase() === MASTER_EMAIL.toLowerCase() && (
+          <Link
+            href="/admin"
+            className="flex w-full items-center justify-center space-x-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-900"
+          >
+            <Settings className="h-4 w-4" />
+            <span>User Management</span>
+          </Link>
+        )}
         <button
-          onClick={() => { logout(); router.push("/"); }}
+          onClick={() => { logout(); router.replace("/"); }}
           className="flex w-full items-center justify-center space-x-2 rounded-lg bg-white border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-red-600"
         >
           <LogOut className="h-4 w-4" />
@@ -150,7 +161,7 @@ export default function JourneyLayout({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/");
+      router.replace("/");
     }
   }, [user, loading, router]);
 
