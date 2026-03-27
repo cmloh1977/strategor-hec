@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 
@@ -26,11 +26,21 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const authResolved = useRef(false);
 
   useEffect(() => {
+    // onAuthStateChanged fires once with the persisted session (or null).
+    // We wait for this first callback before marking loading as false.
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("Auth state changed:", currentUser?.email || "null");
       setUser(currentUser);
-      setLoading(false);
+      if (!authResolved.current) {
+        authResolved.current = true;
+        // Small delay to ensure Firebase internal state is fully consistent
+        setTimeout(() => setLoading(false), 100);
+      } else {
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, []);
