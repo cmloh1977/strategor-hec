@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePortfolio } from "@/lib/PortfolioContext";
 import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles } from "lucide-react";
 import clsx from "clsx";
+import StrategicHealthCard from "./StrategicHealthCard";
 
 const STEP_LABELS: Record<string, string> = {
   "business-model": "Business Model",
@@ -172,8 +173,40 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                 Start My Analysis →
               </button>
             </div>
+          ) : myAnalysisComplete ? (
+            /* ── Strategic Health Card ── */
+            <div className="space-y-4">
+              <StrategicHealthCard analysis={portfolio.myAnalysis} shareCode={shareCode} />
+              
+              {/* Share Code Section */}
+              {shareCode ? (
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4">
+                  <p className="text-xs text-emerald-700 font-semibold mb-2">🎉 Your Share Code</p>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-2xl font-bold text-emerald-800 tracking-widest">{shareCode}</span>
+                    <button
+                      onClick={handleCopy}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                    >
+                      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-emerald-600 mt-2">Share this code with your team members so they can import your Health Card.</p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleGenerateCode}
+                  disabled={generating}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all disabled:opacity-50 shadow-md"
+                >
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Generate Share Code
+                </button>
+              )}
+            </div>
           ) : (
-            /* ── Analysis Card ── */
+            /* ── In-Progress Analysis Card ── */
             <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
               <div className="h-2 w-full" style={{ background: portfolio.myAnalysis.color }} />
               <div className="p-6">
@@ -184,12 +217,6 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                       {portfolio.myAnalysis.ownerName} · {portfolio.myAnalysis.ownerRegion}
                     </p>
                   </div>
-                  {myAnalysisComplete && (
-                    <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full border border-emerald-200">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span className="text-xs font-bold">Complete</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Progress Bar */}
@@ -216,40 +243,13 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   })}
                 </div>
 
-                {/* Action: Continue or Share Code */}
-                {!myAnalysisComplete ? (
-                  <button
-                    onClick={() => onNavigate("analysis", getNextStep(portfolio.myAnalysis!))}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-white transition-all"
-                    style={{ background: portfolio.myAnalysis.color }}
-                  >
-                    Continue Analysis <ChevronRight className="h-4 w-4" />
-                  </button>
-                ) : shareCode ? (
-                  <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4">
-                    <p className="text-xs text-emerald-700 font-semibold mb-2">🎉 Your Share Code</p>
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-2xl font-bold text-emerald-800 tracking-widest">{shareCode}</span>
-                      <button
-                        onClick={handleCopy}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
-                      >
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copied ? "Copied!" : "Copy"}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-emerald-600 mt-2">Share this code with your team members so they can import your Health Card.</p>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleGenerateCode}
-                    disabled={generating}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all disabled:opacity-50 shadow-md"
-                  >
-                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    Generate Share Code
-                  </button>
-                )}
+                <button
+                  onClick={() => onNavigate("analysis", getNextStep(portfolio.myAnalysis!))}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-white transition-all"
+                  style={{ background: portfolio.myAnalysis.color }}
+                >
+                  Continue Analysis <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
             </div>
           )}
