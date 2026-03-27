@@ -1,13 +1,31 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User } from "lucide-react";
+import { Send, Bot, User, CheckCircle2, ArrowRight } from "lucide-react";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import { usePortfolio } from "@/lib/PortfolioContext";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/AuthContext";
+import { useRouter } from "next/navigation";
+
+// Maps moduleId (URL step) → which portfolio key to check
+const MODULE_PILLAR_MAP: Record<string, { key: string; pillars: string[] }> = {
+  "business-model": { key: "businessModel", pillars: ["valueProposition", "valueArchitecture", "contributions"] },
+  "external-analysis": { key: "fiveForces", pillars: ["newEntrants", "suppliers", "rivalry", "buyers", "substitutes"] },
+  "internal-analysis": { key: "vrio", pillars: ["valuable", "rare", "inimitable", "organized"] },
+  "swot-synthesis": { key: "swot", pillars: ["strengths", "weaknesses", "opportunities", "threats"] },
+};
+
+// The order of steps and what comes next
+const STEP_ORDER = ["business-model", "external-analysis", "internal-analysis", "swot-synthesis"];
+const STEP_NAMES: Record<string, string> = {
+  "business-model": "Business Model",
+  "external-analysis": "External Analysis (5 Forces)",
+  "internal-analysis": "Internal Analysis (VRIO)",
+  "swot-synthesis": "SWOT Synthesis",
+};
 
 interface Message {
   id: string;
@@ -73,6 +91,7 @@ function getGreeting(moduleId: string, bizName: string): string {
 export default function ChatPane({ moduleId }: { moduleId: string }) {
   const { user } = useAuth();
   const { portfolio, populatePillar } = usePortfolio();
+  const router = useRouter();
   const bizName = portfolio.myAnalysis?.businessName || "My Business";
 
   const chatDocId = moduleId;
@@ -83,6 +102,7 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [pendingPopulate, setPendingPopulate] = useState<{ pillar: string; points: string[]; messageId: string } | null>(null);
+  const [transitioning, setTransitioning] = useState<{ nextStep: string; nextStepName: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -171,6 +191,40 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
       }
       const pillarName = def ? def.name : pendingPopulate.pillar;
       setPendingPopulate(null);
+
+      // Check if the current module is now FULLY populated
+      const moduleInfo = MODULE_PILLAR_MAP[moduleId];
+      if (moduleInfo && portfolio.myAnalysis) {
+        const moduleData = (portfolio.myAnalysis as any)[moduleInfo.key];
+        // Count how many pillars are already populated (before this one)
+        const alreadyDone = moduleInfo.pillars.filter(p => moduleData[p]?.populated).length;
+        // The pillar we just populated counts as done too
+        const justPopulated = moduleInfo.pillars.includes(pendingPopulate.pillar) ? 1 : 0;
+        const totalDone = alreadyDone + (moduleData[pendingPopulate.pillar]?.populated ? 0 : justPopulated);
+
+        if (totalDone >= moduleInfo.pillars.length) {
+          // Module complete! Find next step
+          const currentIdx = STEP_ORDER.indexOf(moduleId);
+          if (currentIdx < STEP_ORDER.length - 1) {
+            const nextStep = STEP_ORDER[currentIdx + 1];
+            setTransitioning({ nextStep, nextStepName: STEP_NAMES[nextStep] });
+            setTimeout(() => {
+              router.push(`/journey?view=analysis&step=${nextStep}`);
+              setTransitioning(null);
+            }, 2500);
+          } else {
+            // Last module complete — go to dashboard
+            setTransitioning({ nextStep: "dashboard", nextStepName: "Strategy Dashboard" });
+            setTimeout(() => {
+              router.push(`/journey?view=dashboard`);
+              setTransitioning(null);
+            }, 2500);
+          }
+          // Don't send the "proceed to next" system note — we're auto-navigating
+          return;
+        }
+      }
+
       await sendMessage(`(System Note: The diagram has been successfully updated with the key points for ${pillarName}. The user is ready to proceed. Please ask your questions for the next segment.)`);
     }
   };
@@ -276,6 +330,28 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
           <p className="text-[10px] text-slate-400">Shift + Enter for new line · Your Thinking Partner will guide you deeper</p>
         </div>
       </div>
+
+      {/* Module Complete Transition Overlay */}
+      {transitioning && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="text-center space-y-4 animate-in zoom-in-95 duration-500">
+            <div className="mx-auto h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800">{STEP_NAMES[moduleId]} Complete!</h3>
+              <p className="text-sm text-slate-500 mt-1">Great work. Moving to the next module...</p>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-sm font-semibold text-red-600">
+              <ArrowRight className="h-4 w-4" />
+              <span>{transitioning.nextStepName}</span>
+            </div>
+            <div className="w-32 mx-auto h-1 bg-slate-200 rounded-full overflow-hidden">
+              <div className="h-full bg-red-500 rounded-full animate-progress" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
