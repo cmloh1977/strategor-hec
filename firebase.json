@@ -1,4 +1,10 @@
 {
+  "firestore": [
+    {
+      "database": "strategor-hec",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
     "site": "strategor-hec",
     "source": ".",
