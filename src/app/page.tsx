@@ -53,7 +53,10 @@ export default function Home() {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-600 ring-8 ring-white">
               <Shield className="h-8 w-8" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">GALP Strategy Coach</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">GALP Strategy Coach</h1>
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v2.0-dev</span>
+            </div>
             <p className="mt-2 text-sm text-slate-500">Master Strategic Analysis before Paris.</p>
           </div>
 

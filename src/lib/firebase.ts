@@ -14,6 +14,6 @@ const firebaseConfig = {
 // Initialize Firebase only if it hasn't been initialized already
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = getFirestore(app, "strategor-hec");
 
 export { app, auth, db };

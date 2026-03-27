@@ -80,7 +80,7 @@ Guide users to formulate strategic options aligned with the Mid-Term Business Pl
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, moduleId } = body;
+    const { messages, moduleId, diagramState, businessName } = body;
 
     if (!messages || !Array.isArray(messages)) {
         return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
@@ -93,18 +93,74 @@ export async function POST(req: Request) {
     else if (moduleId === "swot-synthesis") validPillars = "strengths, weaknesses, opportunities, threats";
     else if (moduleId === "strategic-options") validPillars = "option1, option2, option3";
 
+    // Build context from prior modules
+    let priorContext = "";
+    if (diagramState) {
+      const summarizePillar = (p: any) => p?.populated ? p.points.join("; ") : null;
+      const sections: string[] = [];
+      
+      const bm = diagramState.businessModel;
+      if (bm) {
+        const parts = [
+          summarizePillar(bm.valueProposition) ? `Value Proposition: ${summarizePillar(bm.valueProposition)}` : null,
+          summarizePillar(bm.valueArchitecture) ? `Value Architecture: ${summarizePillar(bm.valueArchitecture)}` : null,
+          summarizePillar(bm.contributions) ? `Contributions: ${summarizePillar(bm.contributions)}` : null,
+        ].filter(Boolean);
+        if (parts.length) sections.push(`**Business Model (Odyssey 3.14):**\n${parts.join("\n")}`);
+      }
+      
+      const ff = diagramState.fiveForces;
+      if (ff) {
+        const parts = [
+          summarizePillar(ff.newEntrants) ? `New Entrants: ${summarizePillar(ff.newEntrants)}` : null,
+          summarizePillar(ff.suppliers) ? `Suppliers: ${summarizePillar(ff.suppliers)}` : null,
+          summarizePillar(ff.rivalry) ? `Rivalry: ${summarizePillar(ff.rivalry)}` : null,
+          summarizePillar(ff.buyers) ? `Buyers: ${summarizePillar(ff.buyers)}` : null,
+          summarizePillar(ff.substitutes) ? `Substitutes: ${summarizePillar(ff.substitutes)}` : null,
+        ].filter(Boolean);
+        if (parts.length) sections.push(`**External Analysis (5 Forces):**\n${parts.join("\n")}`);
+      }
+      
+      const vr = diagramState.vrio;
+      if (vr) {
+        const parts = [
+          summarizePillar(vr.valuable) ? `Valuable: ${summarizePillar(vr.valuable)}` : null,
+          summarizePillar(vr.rare) ? `Rare: ${summarizePillar(vr.rare)}` : null,
+          summarizePillar(vr.inimitable) ? `Inimitable: ${summarizePillar(vr.inimitable)}` : null,
+          summarizePillar(vr.organized) ? `Organized: ${summarizePillar(vr.organized)}` : null,
+        ].filter(Boolean);
+        if (parts.length) sections.push(`**Internal Analysis (VRIO):**\n${parts.join("\n")}`);
+      }
+      
+      const sw = diagramState.swot;
+      if (sw) {
+        const parts = [
+          summarizePillar(sw.strengths) ? `Strengths: ${summarizePillar(sw.strengths)}` : null,
+          summarizePillar(sw.weaknesses) ? `Weaknesses: ${summarizePillar(sw.weaknesses)}` : null,
+          summarizePillar(sw.opportunities) ? `Opportunities: ${summarizePillar(sw.opportunities)}` : null,
+          summarizePillar(sw.threats) ? `Threats: ${summarizePillar(sw.threats)}` : null,
+        ].filter(Boolean);
+        if (parts.length) sections.push(`**SWOT Synthesis:**\n${parts.join("\n")}`);
+      }
+      
+      if (sections.length > 0) {
+        priorContext = `\n\n## PRIOR ANALYSIS CONTEXT (from user's completed modules)\nThe user has already established the following insights in earlier modules. Reference these to maintain analytical continuity:\n\n${sections.join("\n\n")}`;
+      }
+    }
+
     // Convert chat history format to the format expected by GoogleGenAI
     const formattedHistory = messages.map((m: any) => ({
       role: m.role === 'coach' ? 'model' : 'user',
       parts: [{ text: m.text }],
     }));
-    const activeModuleHint = `\n\n## ACTIVE MODULE\nThe user is currently in the "${moduleId || 'business-model'}" module. Apply ONLY the coaching behavior for this specific module as described above. Do NOT jump ahead to other modules.\n\nCRITICAL: The valid segment names for the current module are exactly: ${validPillars}. YOU MUST USE ONE OF THESE EXACT STRINGS FOR THE [POPULATE:xyz] command.`;
+    const businessHint = businessName ? `\nThe user is currently analyzing a sub-business called: "${businessName}". Refer to it by name when coaching.` : "";
+    const activeModuleHint = `\n\n## ACTIVE MODULE\nThe user is currently in the "${moduleId || 'business-model'}" module.${businessHint} Apply ONLY the coaching behavior for this specific module as described above. Do NOT jump ahead to other modules.\n\nCRITICAL: The valid segment names for the current module are exactly: ${validPillars}. YOU MUST USE ONE OF THESE EXACT STRINGS FOR THE [POPULATE:xyz] command.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: formattedHistory,
       config: {
-        systemInstruction: BASE_SYSTEM_PROMPT + activeModuleHint,
+        systemInstruction: BASE_SYSTEM_PROMPT + priorContext + activeModuleHint,
         temperature: 0.7,
       }
     });
