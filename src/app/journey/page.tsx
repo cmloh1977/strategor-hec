@@ -9,7 +9,7 @@ import PortfolioDashboard from "@/components/PortfolioDashboard";
 export default function JourneyPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { portfolio } = usePortfolio();
+  const { portfolio, isLoading } = usePortfolio();
 
   const view = searchParams.get("view") || "dashboard";
   const step = searchParams.get("step") || "business-model";
@@ -29,6 +29,13 @@ export default function JourneyPage() {
 
   // Analysis (Phase 1 — user's single business)
   if (view === "analysis") {
+    if (isLoading) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-red-500" />
+        </div>
+      );
+    }
     if (!portfolio.myAnalysis) {
       return (
         <div className="flex h-full items-center justify-center text-slate-400">
