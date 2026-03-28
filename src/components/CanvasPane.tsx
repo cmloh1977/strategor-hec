@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useEffect, useRef, useCallback } from "react";
 import { usePortfolio, LANGUAGE_FLAGS } from "@/lib/PortfolioContext";
 import type { AppLanguage } from "@/lib/PortfolioContext";
+import type { PillarData } from "@/lib/PortfolioContext";
 
 // ── Translation Maps ──
 const TRANSLATIONS: Record<string, Record<AppLanguage, string>> = {
@@ -94,14 +96,62 @@ const MODULE_TITLES: Record<string, string> = {
   "swot-synthesis": "SWOT Synthesis",
 };
 
+// ── Translation Cache Hook ──
+type TranslationCache = Record<string, string[]>; // key: `${pillarKey}:${lang}` -> translated points
+
+function useTranslatedPoints(diagramLang: AppLanguage, chatLang: AppLanguage) {
+  const [cache, setCache] = useState<TranslationCache>({});
+  const [translating, setTranslating] = useState<Set<string>>(new Set());
+  const inflight = useRef<Set<string>>(new Set());
+
+  const getTranslated = useCallback((pillarKey: string, pillar: PillarData): string[] | null => {
+    if (!pillar.populated || diagramLang === chatLang) return null; // use originals
+    const cacheKey = `${pillarKey}:${diagramLang}:${pillar.points.join("|")}`.substring(0, 200);
+    return cache[cacheKey] || null;
+  }, [cache, diagramLang, chatLang]);
+
+  const requestTranslation = useCallback(async (pillarKey: string, pillar: PillarData) => {
+    if (!pillar.populated || diagramLang === chatLang) return;
+    const cacheKey = `${pillarKey}:${diagramLang}:${pillar.points.join("|")}`.substring(0, 200);
+    if (cache[cacheKey] || inflight.current.has(cacheKey)) return;
+
+    inflight.current.add(cacheKey);
+    setTranslating(prev => new Set(prev).add(pillarKey));
+
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ points: pillar.points, targetLanguage: diagramLang, sourceLanguage: chatLang }),
+      });
+      if (res.ok) {
+        const { translated } = await res.json();
+        setCache(prev => ({ ...prev, [cacheKey]: translated }));
+      }
+    } catch (e) {
+      console.error("Translation failed:", e);
+    } finally {
+      inflight.current.delete(cacheKey);
+      setTranslating(prev => { const n = new Set(prev); n.delete(pillarKey); return n; });
+    }
+  }, [diagramLang, chatLang, cache]);
+
+  const isTranslating = useCallback((pillarKey: string) => translating.has(pillarKey), [translating]);
+
+  return { getTranslated, requestTranslation, isTranslating };
+}
+
 // ── Segment Card ──
 function SegmentCard({
-  title, subtitle, bgFrom, bgTo, icon, defaultItems, populatedItems, isPopulated, lang,
+  title, subtitle, bgFrom, bgTo, icon, defaultItems, populatedItems, isPopulated, lang, translatedItems, isTranslating: loading,
 }: {
   title: string; subtitle: string; bgFrom: string; bgTo: string; icon: string;
   defaultItems: string[]; populatedItems: string[]; isPopulated: boolean; lang: AppLanguage;
+  translatedItems?: string[] | null; isTranslating?: boolean;
 }) {
-  const items = isPopulated ? populatedItems : defaultItems.map(i => t(i, lang));
+  const items = isPopulated
+    ? (translatedItems || populatedItems)
+    : defaultItems.map(i => t(i, lang));
   return (
     <div
       className="rounded-2xl p-4 transition-all duration-500 shadow-md relative overflow-hidden"
@@ -115,14 +165,16 @@ function SegmentCard({
           <p className="text-white/60 text-[10px] italic">{t(subtitle, lang)}</p>
         </div>
         {isPopulated && (
-          <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30 backdrop-blur-sm">✓</span>
+          <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30 backdrop-blur-sm">
+            {loading ? "⟳" : "✓"}
+          </span>
         )}
       </div>
       <ul className="space-y-1 mt-1">
         {items.map((item, i) => (
           <li key={i} className="flex items-start gap-1.5">
             <span className={`mt-1 w-1 h-1 rounded-full flex-shrink-0 ${isPopulated ? "bg-white" : "bg-white/40"}`} />
-            <span className={`text-[11px] leading-snug ${isPopulated ? "text-white font-medium" : "text-white/50 italic"}`}>{item}</span>
+            <span className={`text-[11px] leading-snug ${isPopulated ? "text-white font-medium" : "text-white/50 italic"} ${loading ? "animate-pulse" : ""}`}>{item}</span>
           </li>
         ))}
       </ul>
@@ -152,26 +204,43 @@ function LanguageToggle({ current, onChange }: { current: AppLanguage; onChange:
   );
 }
 
+// ── Translation Props ──
+interface TranslationProps {
+  lang: AppLanguage;
+  getTranslated: (key: string, pillar: PillarData) => string[] | null;
+  requestTranslation: (key: string, pillar: PillarData) => void;
+  isTranslating: (key: string) => boolean;
+}
+
 // ── Business Model ──
-function BusinessModelDiagram({ lang }: { lang: AppLanguage }) {
+function BusinessModelDiagram({ lang, getTranslated, requestTranslation, isTranslating }: TranslationProps) {
   const { portfolio } = usePortfolio();
   if (!portfolio.myAnalysis) return null;
   const bm = portfolio.myAnalysis.businessModel;
+
+  useEffect(() => {
+    requestTranslation("valueProposition", bm.valueProposition);
+    requestTranslation("valueArchitecture", bm.valueArchitecture);
+    requestTranslation("contributions", bm.contributions);
+  }, [lang, bm]);
 
   return (
     <div className="flex flex-col flex-1">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <SegmentCard title="Value Proposition" subtitle="Who? What?" bgFrom="#E8634A" bgTo="#D94E38" icon="🎯"
           defaultItems={["Customers", "Products and/or services", "Price"]}
-          populatedItems={bm.valueProposition.points} isPopulated={bm.valueProposition.populated} lang={lang} />
+          populatedItems={bm.valueProposition.points} isPopulated={bm.valueProposition.populated} lang={lang}
+          translatedItems={getTranslated("valueProposition", bm.valueProposition)} isTranslating={isTranslating("valueProposition")} />
         <SegmentCard title="Value Architecture" subtitle="How?" bgFrom="#1EB5C4" bgTo="#1A9AAD" icon="⚙️"
           defaultItems={["Value chain", "Partners", "Resources & competencies"]}
-          populatedItems={bm.valueArchitecture.points} isPopulated={bm.valueArchitecture.populated} lang={lang} />
+          populatedItems={bm.valueArchitecture.points} isPopulated={bm.valueArchitecture.populated} lang={lang}
+          translatedItems={getTranslated("valueArchitecture", bm.valueArchitecture)} isTranslating={isTranslating("valueArchitecture")} />
       </div>
       <div className="w-[calc(50%-0.375rem)] mx-auto mb-3">
         <SegmentCard title="Contributions" subtitle="How much?" bgFrom="#89B630" bgTo="#7AA525" icon="📊"
           defaultItems={["Environmental", "Financial", "Societal"]}
-          populatedItems={bm.contributions.points} isPopulated={bm.contributions.populated} lang={lang} />
+          populatedItems={bm.contributions.points} isPopulated={bm.contributions.populated} lang={lang}
+          translatedItems={getTranslated("contributions", bm.contributions)} isTranslating={isTranslating("contributions")} />
       </div>
       <div className="mt-auto pt-2">
         <p className="text-[10px] text-slate-400 italic">Odyssey 3.14 — Lehmann-Ortega, Musikas, Schoettl</p>
@@ -181,10 +250,18 @@ function BusinessModelDiagram({ lang }: { lang: AppLanguage }) {
 }
 
 // ── 5 Forces ──
-function FiveForcesPane({ lang }: { lang: AppLanguage }) {
+function FiveForcesPane({ lang, getTranslated, requestTranslation, isTranslating }: TranslationProps) {
   const { portfolio } = usePortfolio();
   if (!portfolio.myAnalysis) return null;
   const ff = portfolio.myAnalysis.fiveForces;
+
+  useEffect(() => {
+    requestTranslation("newEntrants", ff.newEntrants);
+    requestTranslation("suppliers", ff.suppliers);
+    requestTranslation("rivalry", ff.rivalry);
+    requestTranslation("buyers", ff.buyers);
+    requestTranslation("substitutes", ff.substitutes);
+  }, [lang, ff]);
 
   return (
     <div className="flex flex-col flex-1 pb-4">
@@ -193,27 +270,32 @@ function FiveForcesPane({ lang }: { lang: AppLanguage }) {
           <div className="col-start-2 row-start-1">
             <SegmentCard title="New Entrants" subtitle="Threat" bgFrom="#64748b" bgTo="#475569" icon="🚧"
               defaultItems={["Capital requirements", "Brand loyalty"]}
-              populatedItems={ff.newEntrants.points} isPopulated={ff.newEntrants.populated} lang={lang} />
+              populatedItems={ff.newEntrants.points} isPopulated={ff.newEntrants.populated} lang={lang}
+              translatedItems={getTranslated("newEntrants", ff.newEntrants)} isTranslating={isTranslating("newEntrants")} />
           </div>
           <div className="col-start-1 row-start-2">
             <SegmentCard title="Suppliers" subtitle="Bargaining Power" bgFrom="#64748b" bgTo="#475569" icon="🏭"
               defaultItems={["Supplier concentration", "Switching costs"]}
-              populatedItems={ff.suppliers.points} isPopulated={ff.suppliers.populated} lang={lang} />
+              populatedItems={ff.suppliers.points} isPopulated={ff.suppliers.populated} lang={lang}
+              translatedItems={getTranslated("suppliers", ff.suppliers)} isTranslating={isTranslating("suppliers")} />
           </div>
           <div className="col-start-2 row-start-2 z-10 shadow-xl ring-2 ring-indigo-500/30 rounded-2xl">
             <SegmentCard title="Industry Rivalry" subtitle="Competition Intensity" bgFrom="#4f46e5" bgTo="#4338ca" icon="⚔️"
               defaultItems={["Competitor concentration", "Industry growth"]}
-              populatedItems={ff.rivalry.points} isPopulated={ff.rivalry.populated} lang={lang} />
+              populatedItems={ff.rivalry.points} isPopulated={ff.rivalry.populated} lang={lang}
+              translatedItems={getTranslated("rivalry", ff.rivalry)} isTranslating={isTranslating("rivalry")} />
           </div>
           <div className="col-start-3 row-start-2">
             <SegmentCard title="Buyers" subtitle="Bargaining Power" bgFrom="#64748b" bgTo="#475569" icon="🤝"
               defaultItems={["Buyer concentration", "Price sensitivity"]}
-              populatedItems={ff.buyers.points} isPopulated={ff.buyers.populated} lang={lang} />
+              populatedItems={ff.buyers.points} isPopulated={ff.buyers.populated} lang={lang}
+              translatedItems={getTranslated("buyers", ff.buyers)} isTranslating={isTranslating("buyers")} />
           </div>
           <div className="col-start-2 row-start-3">
             <SegmentCard title="Substitutes" subtitle="Threat" bgFrom="#64748b" bgTo="#475569" icon="🔄"
               defaultItems={["Substitute performance", "Cost of change"]}
-              populatedItems={ff.substitutes.points} isPopulated={ff.substitutes.populated} lang={lang} />
+              populatedItems={ff.substitutes.points} isPopulated={ff.substitutes.populated} lang={lang}
+              translatedItems={getTranslated("substitutes", ff.substitutes)} isTranslating={isTranslating("substitutes")} />
           </div>
         </div>
       </div>
@@ -225,23 +307,34 @@ function FiveForcesPane({ lang }: { lang: AppLanguage }) {
 }
 
 // ── VRIO ──
-function VRIOPane({ lang }: { lang: AppLanguage }) {
+function VRIOPane({ lang, getTranslated, requestTranslation, isTranslating }: TranslationProps) {
   const { portfolio } = usePortfolio();
   if (!portfolio.myAnalysis) return null;
   const vrio = portfolio.myAnalysis.vrio;
+
+  useEffect(() => {
+    requestTranslation("valuable", vrio.valuable);
+    requestTranslation("rare", vrio.rare);
+    requestTranslation("inimitable", vrio.inimitable);
+    requestTranslation("organized", vrio.organized);
+  }, [lang, vrio]);
 
   return (
     <div className="flex flex-col flex-1 pb-4">
       <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-2 gap-3 max-w-[800px] mx-auto">
           <SegmentCard title="Valuable" subtitle="Is it?" bgFrom="#10b981" bgTo="#059669" icon="💎"
-            defaultItems={["Do you offer value?"]} populatedItems={vrio.valuable.points} isPopulated={vrio.valuable.populated} lang={lang} />
+            defaultItems={["Do you offer value?"]} populatedItems={vrio.valuable.points} isPopulated={vrio.valuable.populated} lang={lang}
+            translatedItems={getTranslated("valuable", vrio.valuable)} isTranslating={isTranslating("valuable")} />
           <SegmentCard title="Rare" subtitle="Is it?" bgFrom="#f59e0b" bgTo="#d97706" icon="🦄"
-            defaultItems={["Do many others have it?"]} populatedItems={vrio.rare.points} isPopulated={vrio.rare.populated} lang={lang} />
+            defaultItems={["Do many others have it?"]} populatedItems={vrio.rare.points} isPopulated={vrio.rare.populated} lang={lang}
+            translatedItems={getTranslated("rare", vrio.rare)} isTranslating={isTranslating("rare")} />
           <SegmentCard title="Inimitable" subtitle="Is it costly to copy?" bgFrom="#ef4444" bgTo="#dc2626" icon="🛡️"
-            defaultItems={["Can it be easily copied?"]} populatedItems={vrio.inimitable.points} isPopulated={vrio.inimitable.populated} lang={lang} />
+            defaultItems={["Can it be easily copied?"]} populatedItems={vrio.inimitable.points} isPopulated={vrio.inimitable.populated} lang={lang}
+            translatedItems={getTranslated("inimitable", vrio.inimitable)} isTranslating={isTranslating("inimitable")} />
           <SegmentCard title="Organized" subtitle="Are you?" bgFrom="#6366f1" bgTo="#4f46e5" icon="🧩"
-            defaultItems={["Is the firm organized to exploit it?"]} populatedItems={vrio.organized.points} isPopulated={vrio.organized.populated} lang={lang} />
+            defaultItems={["Is the firm organized to exploit it?"]} populatedItems={vrio.organized.points} isPopulated={vrio.organized.populated} lang={lang}
+            translatedItems={getTranslated("organized", vrio.organized)} isTranslating={isTranslating("organized")} />
         </div>
       </div>
       <div className="mt-auto pt-4 border-t border-slate-100">
@@ -252,23 +345,34 @@ function VRIOPane({ lang }: { lang: AppLanguage }) {
 }
 
 // ── SWOT ──
-function SWOTPane({ lang }: { lang: AppLanguage }) {
+function SWOTPane({ lang, getTranslated, requestTranslation, isTranslating }: TranslationProps) {
   const { portfolio } = usePortfolio();
   if (!portfolio.myAnalysis) return null;
   const swot = portfolio.myAnalysis.swot;
+
+  useEffect(() => {
+    requestTranslation("strengths", swot.strengths);
+    requestTranslation("weaknesses", swot.weaknesses);
+    requestTranslation("opportunities", swot.opportunities);
+    requestTranslation("threats", swot.threats);
+  }, [lang, swot]);
 
   return (
     <div className="flex flex-col flex-1 pb-4">
       <div className="flex-1 overflow-y-auto">
         <div className="grid grid-cols-2 gap-3 max-w-[800px] mx-auto">
           <SegmentCard title="Strengths" subtitle="Internal Positive" bgFrom="#0d9488" bgTo="#0f766e" icon="💪"
-            defaultItems={["What do you do well?"]} populatedItems={swot.strengths.points} isPopulated={swot.strengths.populated} lang={lang} />
+            defaultItems={["What do you do well?"]} populatedItems={swot.strengths.points} isPopulated={swot.strengths.populated} lang={lang}
+            translatedItems={getTranslated("strengths", swot.strengths)} isTranslating={isTranslating("strengths")} />
           <SegmentCard title="Weaknesses" subtitle="Internal Negative" bgFrom="#be123c" bgTo="#9f1239" icon="⚠️"
-            defaultItems={["Where do you lack resources?"]} populatedItems={swot.weaknesses.points} isPopulated={swot.weaknesses.populated} lang={lang} />
+            defaultItems={["Where do you lack resources?"]} populatedItems={swot.weaknesses.points} isPopulated={swot.weaknesses.populated} lang={lang}
+            translatedItems={getTranslated("weaknesses", swot.weaknesses)} isTranslating={isTranslating("weaknesses")} />
           <SegmentCard title="Opportunities" subtitle="External Positive" bgFrom="#0284c7" bgTo="#0369a1" icon="🚀"
-            defaultItems={["What trends can you leverage?"]} populatedItems={swot.opportunities.points} isPopulated={swot.opportunities.populated} lang={lang} />
+            defaultItems={["What trends can you leverage?"]} populatedItems={swot.opportunities.points} isPopulated={swot.opportunities.populated} lang={lang}
+            translatedItems={getTranslated("opportunities", swot.opportunities)} isTranslating={isTranslating("opportunities")} />
           <SegmentCard title="Threats" subtitle="External Negative" bgFrom="#b45309" bgTo="#92400e" icon="⚡"
-            defaultItems={["What could harm you?"]} populatedItems={swot.threats.points} isPopulated={swot.threats.populated} lang={lang} />
+            defaultItems={["What could harm you?"]} populatedItems={swot.threats.points} isPopulated={swot.threats.populated} lang={lang}
+            translatedItems={getTranslated("threats", swot.threats)} isTranslating={isTranslating("threats")} />
         </div>
       </div>
       <div className="mt-auto pt-4 border-t border-slate-100">
@@ -282,16 +386,20 @@ function SWOTPane({ lang }: { lang: AppLanguage }) {
 export default function CanvasPane({ moduleId }: { moduleId: string }) {
   const { portfolio, setDiagramLanguage } = usePortfolio();
   const diagramLang = portfolio.myAnalysis?.diagramLanguage || "en";
+  const chatLang = portfolio.myAnalysis?.chatLanguage || "en";
   const titleKey = MODULE_TITLES[moduleId] || "Business Model";
   const descKey = MODULE_DESCS[moduleId] || "bm-desc";
 
+  const { getTranslated, requestTranslation, isTranslating } = useTranslatedPoints(diagramLang, chatLang);
+  const translationProps = { lang: diagramLang, getTranslated, requestTranslation, isTranslating };
+
   const renderModuleContent = () => {
     switch (moduleId) {
-      case "business-model": return <BusinessModelDiagram lang={diagramLang} />;
-      case "external-analysis": return <FiveForcesPane lang={diagramLang} />;
-      case "internal-analysis": return <VRIOPane lang={diagramLang} />;
-      case "swot-synthesis": return <SWOTPane lang={diagramLang} />;
-      default: return <BusinessModelDiagram lang={diagramLang} />;
+      case "business-model": return <BusinessModelDiagram {...translationProps} />;
+      case "external-analysis": return <FiveForcesPane {...translationProps} />;
+      case "internal-analysis": return <VRIOPane {...translationProps} />;
+      case "swot-synthesis": return <SWOTPane {...translationProps} />;
+      default: return <BusinessModelDiagram {...translationProps} />;
     }
   };
 
