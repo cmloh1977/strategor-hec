@@ -80,7 +80,7 @@ Guide users to formulate strategic options aligned with the Mid-Term Business Pl
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, moduleId, diagramState, businessName } = body;
+    const { messages, moduleId, diagramState, businessName, chatLanguage, difficultyLevel } = body;
 
     if (!messages || !Array.isArray(messages)) {
         return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
@@ -156,11 +156,23 @@ export async function POST(req: Request) {
     const businessHint = businessName ? `\nThe user is currently analyzing a sub-business called: "${businessName}". Refer to it by name when coaching.` : "";
     const activeModuleHint = `\n\n## ACTIVE MODULE\nThe user is currently in the "${moduleId || 'business-model'}" module.${businessHint} Apply ONLY the coaching behavior for this specific module as described above. Do NOT jump ahead to other modules.\n\nCRITICAL: The valid segment names for the current module are exactly: ${validPillars}. YOU MUST USE ONE OF THESE EXACT STRINGS FOR THE [POPULATE:xyz] command.`;
 
+    // Language & Difficulty hints
+    const LANG_NAMES: Record<string, string> = { en: "English", ja: "Japanese (日本語)", fr: "French (Français)", zh: "Chinese (中文)" };
+    const DIFF_DESCS: Record<string, string> = {
+      "high-school": "high school level — use simple vocabulary, avoid jargon, explain concepts in basic terms",
+      "bachelors": "undergraduate level — use standard business vocabulary, explain frameworks briefly",
+      "masters": "graduate/MBA level — use professional business language, assume familiarity with strategic frameworks",
+      "phd": "doctoral/expert level — use advanced academic language, reference theoretical underpinnings, assume deep expertise",
+    };
+    const langName = LANG_NAMES[chatLanguage || "en"] || "English";
+    const diffDesc = DIFF_DESCS[difficultyLevel || "masters"] || DIFF_DESCS["masters"];
+    const langHint = `\n\n## LANGUAGE & DIFFICULTY\nYou MUST respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}.\nAdjust your vocabulary, sentence complexity, and conceptual depth to ${diffDesc}.\nIMPORTANT: The [POPULATE:xyz] tags and pillar keys must remain in English regardless of language setting.`;
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: formattedHistory,
       config: {
-        systemInstruction: BASE_SYSTEM_PROMPT + priorContext + activeModuleHint,
+        systemInstruction: BASE_SYSTEM_PROMPT + priorContext + activeModuleHint + langHint,
         temperature: 0.7,
       }
     });

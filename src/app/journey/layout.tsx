@@ -37,7 +37,7 @@ function SidebarContent() {
           <Zap className="h-6 w-6 text-red-600 mr-3" />
           <h2 className="font-bold text-lg text-slate-800 tracking-tight flex items-center">
             Strategy Coach
-            <span className="ml-2 bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">v3.1</span>
+            <span className="ml-2 bg-slate-800 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-slate-700">v4.0-dev</span>
           </h2>
         </div>
 

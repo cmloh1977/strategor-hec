@@ -153,6 +153,8 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
           moduleId,
           diagramState,
           businessName: bizName,
+          chatLanguage: portfolio.myAnalysis?.chatLanguage || "en",
+          difficultyLevel: portfolio.myAnalysis?.difficultyLevel || "masters",
         }),
       });
 

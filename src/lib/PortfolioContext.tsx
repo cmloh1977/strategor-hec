@@ -56,6 +56,31 @@ export interface HealthCard {
   competitiveStrength: number;
 }
 
+// ── Language & Difficulty ──
+export type AppLanguage = "en" | "ja" | "fr" | "zh";
+export type DifficultyLevel = "high-school" | "bachelors" | "masters" | "phd";
+
+export const LANGUAGE_LABELS: Record<AppLanguage, string> = {
+  en: "English",
+  ja: "日本語",
+  fr: "Français",
+  zh: "中文",
+};
+
+export const LANGUAGE_FLAGS: Record<AppLanguage, string> = {
+  en: "🇬🇧",
+  ja: "🇯🇵",
+  fr: "🇫🇷",
+  zh: "🇨🇳",
+};
+
+export const DIFFICULTY_LABELS: Record<DifficultyLevel, string> = {
+  "high-school": "High School",
+  "bachelors": "Bachelor's",
+  "masters": "Master's",
+  "phd": "PhD",
+};
+
 // ── My Analysis (the user's own single business) ──
 export interface MyAnalysis {
   businessName: string;
@@ -63,6 +88,9 @@ export interface MyAnalysis {
   ownerName: string;
   ownerRegion: string;
   color: string;
+  chatLanguage: AppLanguage;
+  diagramLanguage: AppLanguage;
+  difficultyLevel: DifficultyLevel;
   businessModel: BusinessModelState;
   fiveForces: FiveForcesState;
   vrio: VrioState;
@@ -171,7 +199,8 @@ interface PortfolioContextType {
   isLoading: boolean;
 
   // My Analysis
-  startAnalysis: (name: string, region: string, businessName: string, businessDesc: string) => void;
+  startAnalysis: (name: string, region: string, businessName: string, businessDesc: string, chatLang: AppLanguage, difficulty: DifficultyLevel) => void;
+  setDiagramLanguage: (lang: AppLanguage) => void;
   populatePillar: (module: "businessModel" | "fiveForces" | "vrio" | "swot", pillar: string, points: string[]) => void;
   myAnalysisComplete: boolean;
   myAnalysisProgress: { done: number; total: number; percent: number };
@@ -250,7 +279,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   );
 
   // ── Actions: My Analysis ──
-  const startAnalysis = (name: string, region: string, businessName: string, businessDesc: string) => {
+  const startAnalysis = (name: string, region: string, businessName: string, businessDesc: string, chatLang: AppLanguage = "en", difficulty: DifficultyLevel = "masters") => {
     const colorIndex = Math.floor(Math.random() * COLORS.length);
     update((p) => ({
       ...p,
@@ -260,12 +289,22 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         ownerName: name,
         ownerRegion: region,
         color: COLORS[colorIndex],
+        chatLanguage: chatLang,
+        diagramLanguage: chatLang,
+        difficultyLevel: difficulty,
         businessModel: INIT_BM,
         fiveForces: INIT_5F,
         vrio: INIT_VRIO,
         swot: INIT_SWOT,
       },
     }));
+  };
+
+  const setDiagramLanguage = (lang: AppLanguage) => {
+    update((p) => {
+      if (!p.myAnalysis) return p;
+      return { ...p, myAnalysis: { ...p.myAnalysis, diagramLanguage: lang } };
+    });
   };
 
   const populatePillar = (
@@ -408,6 +447,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         portfolio,
         isLoading,
         startAnalysis,
+        setDiagramLanguage,
         populatePillar,
         myAnalysisComplete,
         myAnalysisProgress,

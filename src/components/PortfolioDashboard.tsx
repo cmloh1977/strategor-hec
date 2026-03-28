@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { usePortfolio } from "@/lib/PortfolioContext";
+import { usePortfolio, LANGUAGE_LABELS, LANGUAGE_FLAGS, DIFFICULTY_LABELS } from "@/lib/PortfolioContext";
+import type { AppLanguage, DifficultyLevel } from "@/lib/PortfolioContext";
 import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles } from "lucide-react";
 import clsx from "clsx";
 import StrategicHealthCard from "./StrategicHealthCard";
@@ -53,6 +54,8 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
   const [region, setRegion] = useState("");
   const [bizName, setBizName] = useState("");
   const [bizDesc, setBizDesc] = useState("");
+  const [chatLang, setChatLang] = useState<AppLanguage>("en");
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>("masters");
 
   // Share code UI
   const [copied, setCopied] = useState(false);
@@ -74,7 +77,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
 
   const handleStart = () => {
     if (name.trim() && region.trim() && bizName.trim()) {
-      startAnalysis(name.trim(), region.trim(), bizName.trim(), bizDesc.trim());
+      startAnalysis(name.trim(), region.trim(), bizName.trim(), bizDesc.trim(), chatLang, difficulty);
     }
   };
 
@@ -155,7 +158,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                 />
               </div>
 
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-xs font-medium text-slate-600 mb-1">Brief Description (optional)</label>
                 <textarea
                   value={bizDesc} onChange={(e) => setBizDesc(e.target.value)}
@@ -163,6 +166,31 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none resize-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                   rows={2}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Thinking Partner Language</label>
+                  <select
+                    value={chatLang} onChange={(e) => setChatLang(e.target.value as AppLanguage)}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 bg-white"
+                  >
+                    {(Object.keys(LANGUAGE_LABELS) as AppLanguage[]).map((k) => (
+                      <option key={k} value={k}>{LANGUAGE_FLAGS[k]} {LANGUAGE_LABELS[k]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Difficulty Level</label>
+                  <select
+                    value={difficulty} onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 bg-white"
+                  >
+                    {(Object.keys(DIFFICULTY_LABELS) as DifficultyLevel[]).map((k) => (
+                      <option key={k} value={k}>{DIFFICULTY_LABELS[k]}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <button
