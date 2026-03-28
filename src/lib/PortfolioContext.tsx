@@ -200,6 +200,7 @@ interface PortfolioContextType {
 
   // My Analysis
   startAnalysis: (name: string, region: string, businessName: string, businessDesc: string, chatLang: AppLanguage, difficulty: DifficultyLevel) => void;
+  resetAnalysis: () => void;
   setDiagramLanguage: (lang: AppLanguage) => void;
   populatePillar: (module: "businessModel" | "fiveForces" | "vrio" | "swot", pillar: string, points: string[]) => void;
   myAnalysisComplete: boolean;
@@ -305,6 +306,21 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       if (!p.myAnalysis) return p;
       return { ...p, myAnalysis: { ...p.myAnalysis, diagramLanguage: lang } };
     });
+  };
+
+  const resetAnalysis = () => {
+    update((p) => ({ ...p, myAnalysis: null, shareCode: null }));
+    // Also clear chat docs from Firestore
+    if (user) {
+      const chatModules = ["business-model", "external-analysis", "internal-analysis", "swot-synthesis"];
+      chatModules.forEach(async (mod) => {
+        try {
+          const { deleteDoc, doc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          await deleteDoc(doc(db, "users", user.uid, "chats", mod));
+        } catch (e) { /* ignore */ }
+      });
+    }
   };
 
   const populatePillar = (
@@ -447,6 +463,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         portfolio,
         isLoading,
         startAnalysis,
+        resetAnalysis,
         setDiagramLanguage,
         populatePillar,
         myAnalysisComplete,

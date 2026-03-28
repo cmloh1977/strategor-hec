@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePortfolio, LANGUAGE_LABELS, LANGUAGE_FLAGS, DIFFICULTY_LABELS } from "@/lib/PortfolioContext";
 import type { AppLanguage, DifficultyLevel } from "@/lib/PortfolioContext";
-import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles } from "lucide-react";
+import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import StrategicHealthCard from "./StrategicHealthCard";
 
@@ -38,6 +38,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
     portfolio,
     isLoading,
     startAnalysis,
+    resetAnalysis,
     myAnalysisComplete,
     myAnalysisProgress,
     generateShareCode,
@@ -66,6 +67,9 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
   const [importCode, setImportCode] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState("");
+
+  // Reset confirmation
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   if (isLoading) {
     return (
@@ -279,6 +283,40 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   Continue Analysis <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Reset / Start Over */}
+          {portfolio.myAnalysis && (
+            <div className="mt-3">
+              {showResetConfirm ? (
+                <div className="rounded-xl bg-red-50 border border-red-200 p-4">
+                  <p className="text-sm text-red-800 font-medium mb-1">Delete this analysis?</p>
+                  <p className="text-xs text-red-600 mb-3">This will permanently erase all your progress, populated data, and chat history. You'll start fresh with a new language and difficulty selection.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { resetAnalysis(); setShowResetConfirm(false); }}
+                      className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors"
+                    >
+                      Yes, Delete Everything
+                    </button>
+                    <button
+                      onClick={() => setShowResetConfirm(false)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowResetConfirm(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Start Over with New Analysis
+                </button>
+              )}
             </div>
           )}
         </div>
