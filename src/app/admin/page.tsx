@@ -3,7 +3,7 @@
 import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter } from "lucide-react";
+import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter, Pencil, Check, X } from "lucide-react";
 import clsx from "clsx";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, deleteUser, signOut } from "firebase/auth";
@@ -158,6 +158,10 @@ export default function AdminDashboard() {
 
   // Active tab
   const [tab, setTab] = useState<"progress" | "users">("progress");
+
+  // Inline cohort edit
+  const [editingCohortUid, setEditingCohortUid] = useState<string | null>(null);
+  const [editCohortValue, setEditCohortValue] = useState("");
 
   // Cohort filter
   const [selectedCohort, setSelectedCohort] = useState<string>("all");
@@ -399,6 +403,18 @@ export default function AdminDashboard() {
       alert("Reset password failed: " + err.message);
     }
     setResetting(false);
+  };
+
+  const handleSaveCohort = async (record: UserRecord) => {
+    try {
+      const updated = { ...record, cohort: editCohortValue.trim() || undefined };
+      await setDoc(doc(db, "_admin_users", record.uid), updated);
+      setEditingCohortUid(null);
+      await loadUsers();
+    } catch (err: any) {
+      console.error("Failed to update cohort:", err);
+      alert("Failed to update cohort: " + err.message);
+    }
   };
 
   if (loading || !user || user.email?.toLowerCase() !== MASTER_EMAIL.toLowerCase()) {
@@ -735,10 +751,32 @@ export default function AdminDashboard() {
                             </div>
                           </td>
                           <td className="px-6 py-3">
-                            {u.cohort ? (
-                              <span className="text-xs font-medium text-indigo-600 bg-indigo-50 rounded px-2 py-0.5">{u.cohort}</span>
+                            {editingCohortUid === u.uid ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={editCohortValue}
+                                  onChange={(e) => setEditCohortValue(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") handleSaveCohort(u); if (e.key === "Escape") setEditingCohortUid(null); }}
+                                  autoFocus
+                                  className="w-28 rounded-lg border border-indigo-300 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                  placeholder="Cohort name"
+                                />
+                                <button onClick={() => handleSaveCohort(u)} className="text-emerald-600 hover:text-emerald-800"><Check className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => setEditingCohortUid(null)} className="text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>
+                              </div>
                             ) : (
-                              <span className="text-xs text-slate-300">—</span>
+                              <button
+                                onClick={() => { setEditingCohortUid(u.uid); setEditCohortValue(u.cohort || ""); }}
+                                className="group flex items-center gap-1 hover:bg-indigo-50 rounded px-1.5 py-0.5 -mx-1.5 transition-colors"
+                              >
+                                {u.cohort ? (
+                                  <span className="text-xs font-medium text-indigo-600">{u.cohort}</span>
+                                ) : (
+                                  <span className="text-xs text-slate-300">—</span>
+                                )}
+                                <Pencil className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
                             )}
                           </td>
                           <td className="px-6 py-3 text-slate-500 text-xs font-mono">{u.password || "—"}</td>
