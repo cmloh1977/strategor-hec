@@ -2,13 +2,14 @@
 
 import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter } from "lucide-react";
 import clsx from "clsx";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, deleteUser, signOut } from "firebase/auth";
 import { doc, setDoc, getDocs, collection, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import * as XLSX from "xlsx";
 
 const MASTER_EMAIL = "chee_ming_loh@toyota-tsusho.com";
 
@@ -22,7 +23,7 @@ const firebaseConfig = {
 };
 
 function getSecondaryAuth() {
-  const secondaryApp = initializeApp(firebaseConfig, "adminHelper");
+  const secondaryApp = initializeApp(firebaseConfig, "adminHelper_" + Date.now());
   return { auth: getAuth(secondaryApp), app: secondaryApp };
 }
 
@@ -31,6 +32,8 @@ interface UserRecord {
   uid: string;
   createdAt: string;
   password?: string;
+  name?: string;
+  cohort?: string;
 }
 
 // Match the PortfolioContext structure
@@ -132,10 +135,17 @@ export default function AdminDashboard() {
   const [loadingProgress, setLoadingProgress] = useState(false);
 
   // Create form
+  const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [newCohort, setNewCohort] = useState("");
   const [creating, setCreating] = useState(false);
   const [createMsg, setCreateMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Bulk import
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number; errors: string[] } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
@@ -148,6 +158,9 @@ export default function AdminDashboard() {
 
   // Active tab
   const [tab, setTab] = useState<"progress" | "users">("progress");
+
+  // Cohort filter
+  const [selectedCohort, setSelectedCohort] = useState<string>("all");
 
   // Auth guard
   useEffect(() => {
@@ -170,7 +183,6 @@ export default function AdminDashboard() {
       snap.forEach((d) => list.push(d.data() as UserRecord));
       list.sort((a, b) => a.email.localeCompare(b.email));
       setUsers(list);
-      // After loading users, load their progress
       await loadProgress(list);
     } catch (e) {
       console.error("Failed to load users:", e);
@@ -233,12 +245,16 @@ export default function AdminDashboard() {
         uid: result.user.uid,
         createdAt: new Date().toISOString(),
         password: newPassword.trim(),
+        name: newName.trim() || undefined,
+        cohort: newCohort.trim() || undefined,
       };
       await setDoc(doc(db, "_admin_users", result.user.uid), record);
 
       setCreateMsg({ type: "success", text: `✓ Created ${newEmail.trim()}` });
+      setNewName("");
       setNewEmail("");
       setNewPassword("");
+      // Keep cohort for consecutive additions to same cohort
       await loadUsers();
     } catch (err: any) {
       if (secondaryApp) { try { await deleteApp(secondaryApp); } catch (_) {} }
@@ -249,6 +265,93 @@ export default function AdminDashboard() {
       setCreateMsg({ type: "error", text: msg });
     }
     setCreating(false);
+  };
+
+  // ── Bulk Import ──
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Name", "Email", "Password", "Cohort"],
+      ["John Doe", "john.doe@company.com", "password123", "Cohort 2026"],
+      ["Jane Smith", "jane.smith@company.com", "password123", "Cohort 2026"],
+    ]);
+    ws["!cols"] = [{ wch: 20 }, { wch: 30 }, { wch: 15 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Users");
+    XLSX.writeFile(wb, "user-import-template.xlsx");
+  };
+
+  const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportProgress(null);
+
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws);
+
+      if (rows.length === 0) {
+        setImportProgress({ current: 0, total: 0, errors: ["No data rows found in file."] });
+        setImporting(false);
+        return;
+      }
+
+      const errors: string[] = [];
+      const total = rows.length;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const name = (row["Name"] || row["name"] || "").toString().trim();
+        const email = (row["Email"] || row["email"] || "").toString().trim();
+        const password = (row["Password"] || row["password"] || "").toString().trim();
+        const cohort = (row["Cohort"] || row["cohort"] || "").toString().trim();
+
+        setImportProgress({ current: i + 1, total, errors: [...errors] });
+
+        if (!email || !password) {
+          errors.push(`Row ${i + 2}: Missing email or password`);
+          continue;
+        }
+
+        let secondaryApp: any = null;
+        try {
+          const { auth: secondaryAuth, app } = getSecondaryAuth();
+          secondaryApp = app;
+          const result = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+          await signOut(secondaryAuth);
+          await deleteApp(app);
+          secondaryApp = null;
+
+          const record: UserRecord = {
+            email,
+            uid: result.user.uid,
+            createdAt: new Date().toISOString(),
+            password,
+            name: name || undefined,
+            cohort: cohort || undefined,
+          };
+          await setDoc(doc(db, "_admin_users", result.user.uid), record);
+        } catch (err: any) {
+          if (secondaryApp) { try { await deleteApp(secondaryApp); } catch (_) {} }
+          let msg = err.message;
+          if (err.code === "auth/email-already-in-use") msg = "already exists";
+          if (err.code === "auth/invalid-email") msg = "invalid email";
+          if (err.code === "auth/weak-password") msg = "weak password";
+          errors.push(`Row ${i + 2} (${email}): ${msg}`);
+        }
+      }
+
+      setImportProgress({ current: total, total, errors });
+      await loadUsers();
+    } catch (err: any) {
+      setImportProgress({ current: 0, total: 0, errors: [`Failed to parse file: ${err.message}`] });
+    }
+
+    setImporting(false);
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleDelete = async (record: UserRecord) => {
@@ -306,10 +409,24 @@ export default function AdminDashboard() {
     );
   }
 
-  // Summary stats
-  const completed = participants.filter(p => p.status === "Completed").length;
-  const inProgress = participants.filter(p => p.status === "In Progress").length;
-  const notStarted = participants.filter(p => p.status === "Not Started").length;
+  // Cohort list for filter
+  const allCohorts = [...new Set(users.map(u => u.cohort).filter(Boolean))] as string[];
+  allCohorts.sort();
+
+  // Filtered data
+  const filteredUsers = selectedCohort === "all" ? users : users.filter(u => u.cohort === selectedCohort);
+  const filteredParticipants = selectedCohort === "all" ? participants : participants.filter(p => p.user.cohort === selectedCohort);
+
+  // Summary stats (from filtered)
+  const completed = filteredParticipants.filter(p => p.status === "Completed").length;
+  const inProgress = filteredParticipants.filter(p => p.status === "In Progress").length;
+  const notStarted = filteredParticipants.filter(p => p.status === "Not Started").length;
+
+  // Helper to get status for a user in the Users tab
+  const getUserStatus = (u: UserRecord) => {
+    const p = participants.find(pp => pp.user.uid === u.uid);
+    return p?.status || "Not Started";
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
@@ -332,35 +449,34 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-sm">
+        {/* Summary + Filter Row */}
+        <div className="flex items-center gap-4">
+          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-sm flex-shrink-0">
             <div className="flex items-center gap-2 mb-1">
               <Users className="h-4 w-4 text-slate-400" />
               <span className="text-xs text-slate-400 font-semibold uppercase">Total</span>
             </div>
-            <p className="text-2xl font-bold text-slate-800">{participants.length}</p>
+            <p className="text-2xl font-bold text-slate-800">{filteredParticipants.length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-emerald-200 px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span className="text-xs text-emerald-600 font-semibold uppercase">Completed</span>
-            </div>
-            <p className="text-2xl font-bold text-emerald-700">{completed}</p>
+
+          <div className="flex items-center gap-3 text-xs font-semibold">
+            <span className="flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> {completed} Completed</span>
+            <span className="text-slate-200">|</span>
+            <span className="flex items-center gap-1 text-amber-600"><BarChart3 className="h-3.5 w-3.5" /> {inProgress} In Progress</span>
+            <span className="text-slate-200">|</span>
+            <span className="flex items-center gap-1 text-slate-400"><Circle className="h-3.5 w-3.5" /> {notStarted} Not Started</span>
           </div>
-          <div className="bg-white rounded-xl border border-amber-200 px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <BarChart3 className="h-4 w-4 text-amber-500" />
-              <span className="text-xs text-amber-600 font-semibold uppercase">In Progress</span>
-            </div>
-            <p className="text-2xl font-bold text-amber-700">{inProgress}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <Circle className="h-4 w-4 text-slate-300" />
-              <span className="text-xs text-slate-400 font-semibold uppercase">Not Started</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-500">{notStarted}</p>
+
+          <div className="ml-auto flex items-center gap-2">
+            <Filter className="h-4 w-4 text-slate-400" />
+            <select
+              value={selectedCohort}
+              onChange={(e) => setSelectedCohort(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+            >
+              <option value="all">All Cohorts</option>
+              {allCohorts.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
         </div>
 
@@ -388,26 +504,27 @@ export default function AdminDashboard() {
                 <BarChart3 className="h-5 w-5 text-red-600" />
                 <h2 className="font-bold text-slate-800">Participant Progress</h2>
               </div>
-              <span className="text-xs text-slate-400">{participants.length} participants</span>
+              <span className="text-xs text-slate-400">{filteredParticipants.length} participants</span>
             </div>
 
             {loadingProgress || loadingUsers ? (
               <div className="p-12 text-center">
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" />
               </div>
-            ) : participants.length === 0 ? (
+            ) : filteredParticipants.length === 0 ? (
               <div className="p-12 text-center text-slate-400">
                 <p>No participants yet. Create users in the User Management tab.</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-50">
-                {participants.map((p) => (
+                {filteredParticipants.map((p) => (
                   <div key={p.user.uid} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
                     <div className="flex items-center gap-4">
                       {/* User info */}
                       <div className="w-48 flex-shrink-0">
-                        <p className="font-semibold text-slate-800 text-sm truncate">{p.portfolio?.myAnalysis?.ownerName || p.user.email.split("@")[0]}</p>
+                        <p className="font-semibold text-slate-800 text-sm truncate">{p.user.name || p.portfolio?.myAnalysis?.ownerName || p.user.email.split("@")[0]}</p>
                         <p className="text-xs text-slate-400 truncate">{p.user.email}</p>
+                        {p.user.cohort && <span className="inline-block mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5">{p.user.cohort}</span>}
                       </div>
 
                       {/* Status badge */}
@@ -475,23 +592,39 @@ export default function AdminDashboard() {
                 <UserPlus className="h-5 w-5 text-red-600" />
                 <h2 className="font-bold text-slate-800">Create New User</h2>
               </div>
-              <form onSubmit={handleCreate} className="flex gap-3 items-end">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
-                  <input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="participant@toyota-tsusho.com"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
+              <form onSubmit={handleCreate} className="space-y-3">
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
+                    <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Email *</label>
+                    <input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="participant@company.com"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
+                  </div>
                 </div>
-                <div className="w-48">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Password</label>
-                  <input type="text" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="password123"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
+                <div className="flex gap-3 items-end">
+                  <div className="w-48">
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Password *</label>
+                    <input type="text" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="password123"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
+                  </div>
+                  <div className="w-48">
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Cohort</label>
+                    <input type="text" value={newCohort} onChange={(e) => setNewCohort(e.target.value)}
+                      placeholder="Cohort 2026"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
+                  </div>
+                  <button type="submit" disabled={creating}
+                    className="px-6 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap">
+                    {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create User"}
+                  </button>
                 </div>
-                <button type="submit" disabled={creating}
-                  className="px-6 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap">
-                  {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create User"}
-                </button>
               </form>
               {createMsg && (
                 <div className={clsx("mt-3 px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2",
@@ -502,45 +635,127 @@ export default function AdminDashboard() {
               )}
             </div>
 
+            {/* Bulk Import */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+                <h2 className="font-bold text-slate-800">Bulk Import Users</h2>
+              </div>
+              <div className="flex items-center gap-4">
+                <button onClick={handleDownloadTemplate}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                  <Download className="h-4 w-4" />
+                  Download Excel Template
+                </button>
+                <div className="flex-1 relative">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleBulkImport}
+                    disabled={importing}
+                    className="hidden"
+                    id="bulk-import-file"
+                  />
+                  <label htmlFor="bulk-import-file"
+                    className={clsx(
+                      "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-colors",
+                      importing ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                    )}>
+                    <Upload className="h-4 w-4" />
+                    {importing ? "Importing..." : "Upload Excel File"}
+                  </label>
+                </div>
+              </div>
+
+              {/* Import Progress */}
+              {importProgress && (
+                <div className="mt-4 space-y-2">
+                  {importProgress.total > 0 && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }} />
+                      </div>
+                      <span className="text-xs font-bold text-slate-600">{importProgress.current}/{importProgress.total}</span>
+                    </div>
+                  )}
+                  {importProgress.current === importProgress.total && importProgress.total > 0 && (
+                    <p className="text-sm text-emerald-700 font-medium">
+                      ✓ Import complete: {importProgress.total - importProgress.errors.length} succeeded, {importProgress.errors.length} failed
+                    </p>
+                  )}
+                  {importProgress.errors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 max-h-32 overflow-y-auto">
+                      {importProgress.errors.map((err, i) => (
+                        <p key={i} className="text-xs text-red-600">{err}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Users Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
                 <Users className="h-5 w-5 text-indigo-600" />
                 <h2 className="font-bold text-slate-800">Registered Users</h2>
-                <span className="ml-auto text-xs text-slate-400 font-medium">{users.length} users</span>
+                <span className="ml-auto text-xs text-slate-400 font-medium">{filteredUsers.length} users</span>
               </div>
               {loadingUsers ? (
                 <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></div>
-              ) : users.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <div className="p-12 text-center text-slate-400"><p>No users found. Create one above.</p></div>
               ) : (
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                     <tr>
-                      <th className="px-6 py-3">Email</th>
+                      <th className="px-6 py-3">User</th>
+                      <th className="px-6 py-3">Cohort</th>
                       <th className="px-6 py-3">Password</th>
                       <th className="px-6 py-3">Created</th>
                       <th className="px-6 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {users.map((u) => (
-                      <tr key={u.uid} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-3"><span className="font-medium text-slate-800">{u.email}</span></td>
-                        <td className="px-6 py-3 text-slate-500 text-xs font-mono">{u.password || "—"}</td>
-                        <td className="px-6 py-3 text-slate-500 text-xs">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="px-6 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => { setResetTarget(u); setResetPass(""); }} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
-                              <Key className="h-3 w-3" /> Reset PW
-                            </button>
-                            <button onClick={() => setDeleteTarget(u)} className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
-                              <Trash2 className="h-3 w-3" /> Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredUsers.map((u) => {
+                      const status = getUserStatus(u);
+                      return (
+                        <tr key={u.uid} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-3">
+                            <div className="flex items-center gap-2">
+                              {/* Status icon */}
+                              {status === "Completed" && <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />}
+                              {status === "In Progress" && <BarChart3 className="h-4 w-4 text-amber-500 flex-shrink-0" />}
+                              {status === "Not Started" && <Circle className="h-4 w-4 text-slate-300 flex-shrink-0" />}
+                              <div>
+                                {u.name && <p className="font-semibold text-slate-800 text-sm">{u.name}</p>}
+                                <p className={clsx("text-slate-600", u.name ? "text-xs" : "font-medium")}>{u.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-3">
+                            {u.cohort ? (
+                              <span className="text-xs font-medium text-indigo-600 bg-indigo-50 rounded px-2 py-0.5">{u.cohort}</span>
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-slate-500 text-xs font-mono">{u.password || "—"}</td>
+                          <td className="px-6 py-3 text-slate-500 text-xs">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "-"}</td>
+                          <td className="px-6 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button onClick={() => { setResetTarget(u); setResetPass(""); }} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                                <Key className="h-3 w-3" /> Reset PW
+                              </button>
+                              <button onClick={() => setDeleteTarget(u)} className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
+                                <Trash2 className="h-3 w-3" /> Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
