@@ -56,20 +56,25 @@ const PILLAR_DEF: Record<string, {
   threats: { name: "Threats", emoji: "⚡", module: "swot" },
 };
 
-function parsePopulateCommand(text: string): { pillar: string | null; points: string[]; cleanText: string } {
-  const match = text.match(/\[POPULATE:([a-zA-Z0-9]+)\]/i);
-  if (!match) return { pillar: null, points: [], cleanText: text };
-  const pillar = match[1];
-  if (!PILLAR_DEF[pillar]) return { pillar: null, points: [], cleanText: text };
+function parsePopulateCommand(text: string): { populates: { pillar: string; points: string[] }[]; cleanText: string } {
+  const regex = /\[POPULATE:([a-zA-Z0-9]+)\]([\s\S]*?)(?:\[\/POPULATE\]|(?=\[POPULATE:))/gi;
+  const populates: { pillar: string; points: string[] }[] = [];
+  let cleanText = text;
+  let match;
 
-  const afterMarker = text.substring(text.indexOf(match[0]) + match[0].length);
-  let relevantBlock = afterMarker;
-  const closingIdx = afterMarker.indexOf('[/POPULATE]');
-  if (closingIdx !== -1) relevantBlock = afterMarker.substring(0, closingIdx);
+  while ((match = regex.exec(text)) !== null) {
+    const pillar = match[1];
+    if (!PILLAR_DEF[pillar]) continue;
+    const block = match[2] || "";
+    const points = block.split('\n').map(l => l.trim()).map(l => l.replace(/^[\s•\-*]+/, '').trim()).filter(l => l.length > 0 && l.length < 200);
+    if (points.length > 0) {
+      populates.push({ pillar, points: points.slice(0, 8) });
+    }
+  }
 
-  const points = relevantBlock.split('\n').map(l => l.trim()).map(l => l.replace(/^[\s•\-*]+/, '').trim()).filter(l => l.length > 0 && l.length < 200);
-  let cleanText = text.replace(match[0], '').replace(/\[\/POPULATE\]/gi, '').trim();
-  return { pillar, points: points.slice(0, 8), cleanText };
+  // Clean all POPULATE tags from the display text
+  cleanText = text.replace(/\[POPULATE:[a-zA-Z0-9]+\]/gi, '').replace(/\[\/POPULATE\]/gi, '').trim();
+  return { populates, cleanText };
 }
 
 function getGreeting(moduleId: string, bizName: string, lang?: string): string {
@@ -143,13 +148,13 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [pendingPopulate, setPendingPopulate] = useState<{ pillar: string; points: string[]; messageId: string } | null>(null);
+  const [pendingPopulates, setPendingPopulates] = useState<{ pillar: string; points: string[] }[]>([]);
   const [transitioning, setTransitioning] = useState<{ nextStep: string; nextStepName: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, pendingPopulate]);
+  }, [messages, isTyping, pendingPopulates]);
 
   // Load chat from Firestore
   useEffect(() => {
@@ -202,14 +207,14 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
 
       if (!response.ok) throw new Error('API Error');
       const data = await response.json();
-      const { pillar, points, cleanText } = parsePopulateCommand(data.text);
+      const { populates, cleanText } = parsePopulateCommand(data.text);
       const cleanMessage = { ...data, text: cleanText };
       const finalMessages = [...updatedMessages, cleanMessage];
       setMessages(finalMessages);
       await saveToFirestore(finalMessages);
 
-      if (pillar && points.length > 0) {
-        setPendingPopulate({ pillar, points, messageId: cleanMessage.id });
+      if (populates.length > 0) {
+        setPendingPopulates(populates);
       }
     } catch (error) {
       console.error(error);
@@ -228,52 +233,51 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
   };
 
   const handleConfirmPopulate = async () => {
-    if (pendingPopulate) {
-      const def = PILLAR_DEF[pendingPopulate.pillar];
-      if (def) {
-        populatePillar(def.module, pendingPopulate.pillar, pendingPopulate.points);
-      }
-      const pillarName = def ? def.name : pendingPopulate.pillar;
-      setPendingPopulate(null);
-
-      // Check if the current module is now FULLY populated
-      const moduleInfo = MODULE_PILLAR_MAP[moduleId];
-      if (moduleInfo && portfolio.myAnalysis) {
-        const moduleData = (portfolio.myAnalysis as any)[moduleInfo.key];
-        // Count how many pillars are already populated (before this one)
-        const alreadyDone = moduleInfo.pillars.filter(p => moduleData[p]?.populated).length;
-        // The pillar we just populated counts as done too
-        const justPopulated = moduleInfo.pillars.includes(pendingPopulate.pillar) ? 1 : 0;
-        const totalDone = alreadyDone + (moduleData[pendingPopulate.pillar]?.populated ? 0 : justPopulated);
-
-        if (totalDone >= moduleInfo.pillars.length) {
-          // Module complete! Find next step
-          const currentIdx = STEP_ORDER.indexOf(moduleId);
-          if (currentIdx < STEP_ORDER.length - 1) {
-            const nextStep = STEP_ORDER[currentIdx + 1];
-            setTransitioning({ nextStep, nextStepName: STEP_NAMES[nextStep] });
-            setTimeout(() => {
-              router.push(`/journey?view=analysis&step=${nextStep}`);
-              setTransitioning(null);
-            }, 2500);
-          } else {
-            // Last module complete — go to dashboard
-            setTransitioning({ nextStep: "dashboard", nextStepName: "Strategy Dashboard" });
-            setTimeout(() => {
-              router.push(`/journey?view=dashboard`);
-              setTransitioning(null);
-            }, 2500);
-          }
-          // Don't send the "proceed to next" system note — we're auto-navigating
-          return;
-        }
-      }
-
-      await sendMessage(`(System Note: The diagram has been successfully updated with the key points for ${pillarName}. The user is ready to proceed. Please ask your questions for the next segment.)`);
+    if (pendingPopulates.length === 0) return;
+    const current = pendingPopulates[0];
+    const def = PILLAR_DEF[current.pillar];
+    if (def) {
+      populatePillar(def.module, current.pillar, current.points);
     }
+    const pillarName = def ? def.name : current.pillar;
+    const remaining = pendingPopulates.slice(1);
+    setPendingPopulates(remaining);
+
+    // If there are more populates in the queue, don't proceed yet
+    if (remaining.length > 0) return;
+
+    // Check if the current module is now FULLY populated
+    const moduleInfo = MODULE_PILLAR_MAP[moduleId];
+    if (moduleInfo && portfolio.myAnalysis) {
+      const moduleData = (portfolio.myAnalysis as any)[moduleInfo.key];
+      const alreadyDone = moduleInfo.pillars.filter((p: string) => moduleData[p]?.populated).length;
+      const justPopulated = moduleInfo.pillars.includes(current.pillar) ? 1 : 0;
+      const totalDone = alreadyDone + (moduleData[current.pillar]?.populated ? 0 : justPopulated);
+
+      if (totalDone >= moduleInfo.pillars.length) {
+        const currentIdx = STEP_ORDER.indexOf(moduleId);
+        if (currentIdx < STEP_ORDER.length - 1) {
+          const nextStep = STEP_ORDER[currentIdx + 1];
+          setTransitioning({ nextStep, nextStepName: STEP_NAMES[nextStep] });
+          setTimeout(() => {
+            router.push(`/journey?view=analysis&step=${nextStep}`);
+            setTransitioning(null);
+          }, 2500);
+        } else {
+          setTransitioning({ nextStep: "dashboard", nextStepName: "Strategy Dashboard" });
+          setTimeout(() => {
+            router.push(`/journey?view=dashboard`);
+            setTransitioning(null);
+          }, 2500);
+        }
+        return;
+      }
+    }
+
+    await sendMessage(`(System Note: The diagram has been successfully updated with the key points for ${pillarName}. The user is ready to proceed. Please ask your questions for the next segment.)`);
   };
 
-  const handleDeclinePopulate = () => { setPendingPopulate(null); };
+  const handleDeclinePopulate = () => { setPendingPopulates([]); };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 border-l border-slate-200">
@@ -320,14 +324,14 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
         ))}
 
         {/* Populate confirmation */}
-        {pendingPopulate && (
+        {pendingPopulates.length > 0 && (
           <div className="mx-2 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">{PILLAR_DEF[pendingPopulate.pillar]?.emoji}</span>
-              <p className="font-semibold text-emerald-800 text-sm">Ready to populate: {PILLAR_DEF[pendingPopulate.pillar]?.name}</p>
+              <span className="text-lg">{PILLAR_DEF[pendingPopulates[0].pillar]?.emoji}</span>
+              <p className="font-semibold text-emerald-800 text-sm">Ready to populate: {PILLAR_DEF[pendingPopulates[0].pillar]?.name}{pendingPopulates.length > 1 ? ` (1 of ${pendingPopulates.length})` : ""}</p>
             </div>
             <ul className="text-xs text-emerald-700 space-y-1 mb-3 ml-7">
-              {pendingPopulate.points.map((p, i) => <li key={i}>• {p}</li>)}
+              {pendingPopulates[0].points.map((p: string, i: number) => <li key={i}>• {p}</li>)}
             </ul>
             <div className="flex gap-2 ml-7">
               <button onClick={handleConfirmPopulate} className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm">
