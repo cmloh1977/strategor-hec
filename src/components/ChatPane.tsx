@@ -66,7 +66,7 @@ function parsePopulateCommand(text: string): { populates: { pillar: string; poin
     const pillar = match[1];
     if (!PILLAR_DEF[pillar]) continue;
     const block = match[2] || "";
-    const points = block.split('\n').map(l => l.trim()).map(l => l.replace(/^[\s•\-*]+/, '').trim()).filter(l => l.length > 0 && l.length < 200);
+    const points = block.split('\n').map(l => l.trim()).map(l => l.replace(/^[\s•\-*]+/, '').trim()).filter(l => l.length > 0 && l.length < 500);
     if (points.length > 0) {
       populates.push({ pillar, points: points.slice(0, 8) });
     }
