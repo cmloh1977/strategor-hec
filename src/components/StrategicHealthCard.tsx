@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Shield, Swords, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Sparkles, Loader2, Star, TrendingUp } from "lucide-react";
+import { Shield, Swords, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Sparkles, Loader2, Star, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/lib/AuthContext";
 import type { MyAnalysis } from "@/lib/PortfolioContext";
 
 interface StrategicHealthCardProps {
@@ -51,10 +54,41 @@ function getGradeInfo(score: number) {
 }
 
 export default function StrategicHealthCard({ analysis, shareCode }: StrategicHealthCardProps) {
+  const { user } = useAuth();
   const [aiData, setAiData] = useState<AIAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasFetched = useRef(false);
+
+  const saveToFirestore = async (data: AIAnalysis) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, "users", user.uid, "portfolio", "healthAnalysis"), {
+        ...data,
+        updatedAt: new Date().toISOString(),
+        businessName: analysis.businessName,
+      });
+    } catch (e) {
+      console.error("Failed to save health analysis:", e);
+    }
+  };
+
+  const loadFromFirestore = async (): Promise<AIAnalysis | null> => {
+    if (!user) return null;
+    try {
+      const snap = await getDoc(doc(db, "users", user.uid, "portfolio", "healthAnalysis"));
+      if (snap.exists()) {
+        const cached = snap.data() as AIAnalysis & { businessName?: string };
+        // Only use cache if it matches the current analysis
+        if (cached.businessName === analysis.businessName) {
+          return cached;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load health analysis:", e);
+    }
+    return null;
+  };
 
   const runAnalysis = async () => {
     setAnalyzing(true);
@@ -69,21 +103,31 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setAiData(data);
+      await saveToFirestore(data);
     } catch (err: any) {
       setError(err.message || "Analysis failed");
     }
     setAnalyzing(false);
   };
 
-  // Auto-trigger on mount
+  // Load from Firestore first, else run fresh analysis
   useEffect(() => {
-    if (!hasFetched.current) {
-      hasFetched.current = true;
-      runAnalysis();
-    }
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
+    (async () => {
+      setAnalyzing(true);
+      const cached = await loadFromFirestore();
+      if (cached) {
+        setAiData(cached);
+        setAnalyzing(false);
+      } else {
+        await runAnalysis();
+      }
+    })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Loading state
+  // ── Loading state ──
   if (analyzing && !aiData) {
     return (
       <div className="rounded-2xl bg-white border border-slate-200 shadow-lg overflow-hidden">
@@ -106,7 +150,6 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           <Loader2 className="h-5 w-5 text-indigo-500 animate-spin" />
           <p className="text-sm text-indigo-700 font-medium">AI is analyzing your strategic frameworks...</p>
         </div>
-        {/* Skeleton grid */}
         <div className="grid grid-cols-2 divide-x divide-y divide-slate-100">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="p-4 space-y-3">
@@ -129,7 +172,7 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
     );
   }
 
-  // Error state
+  // ── Error state ──
   if (error && !aiData) {
     return (
       <div className="rounded-2xl bg-white border border-slate-200 shadow-lg overflow-hidden">
@@ -147,7 +190,6 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
     );
   }
 
-  // Still waiting for data
   if (!aiData) return null;
 
   // ── AI data is ready ──
@@ -195,9 +237,9 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           </div>
         </div>
 
-        {/* Q2: Competitive Pressure */}
+        {/* Q2: Competitive Pressure — Threat Meter */}
         <div className="p-4">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-1">
             <div className="h-7 w-7 rounded-lg bg-red-50 flex items-center justify-center">
               <Swords className="h-3.5 w-3.5 text-red-600" />
             </div>
@@ -206,18 +248,19 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
               <p className="text-[10px] text-slate-400">Porter&apos;s 5 Forces</p>
             </div>
           </div>
+          <p className="text-[9px] text-slate-400 mb-2 ml-9">Threat level: <span className="text-emerald-500">■</span> Low → <span className="text-amber-500">■</span> Moderate → <span className="text-red-500">■</span> High</p>
           <div className="space-y-1.5">
-            <SeverityBar label="New Entrants" severity={aiData.fiveForces.newEntrants.severity} tag={aiData.fiveForces.newEntrants.label} />
-            <SeverityBar label="Suppliers" severity={aiData.fiveForces.suppliers.severity} tag={aiData.fiveForces.suppliers.label} />
-            <SeverityBar label="Rivalry" severity={aiData.fiveForces.rivalry.severity} tag={aiData.fiveForces.rivalry.label} />
-            <SeverityBar label="Buyers" severity={aiData.fiveForces.buyers.severity} tag={aiData.fiveForces.buyers.label} />
-            <SeverityBar label="Substitutes" severity={aiData.fiveForces.substitutes.severity} tag={aiData.fiveForces.substitutes.label} />
-            <p className="text-[10px] font-medium text-slate-500 mt-2">Industry Attractiveness: <span className={clsx(
-              "font-bold",
-              aiData.fiveForces.overallAttractiveness === "High" ? "text-emerald-600" :
-              aiData.fiveForces.overallAttractiveness === "Moderate" ? "text-amber-600" : "text-red-600"
-            )}>{aiData.fiveForces.overallAttractiveness}</span></p>
+            <ThreatMeter label="New Entrants" severity={aiData.fiveForces.newEntrants.severity} />
+            <ThreatMeter label="Suppliers" severity={aiData.fiveForces.suppliers.severity} />
+            <ThreatMeter label="Rivalry" severity={aiData.fiveForces.rivalry.severity} />
+            <ThreatMeter label="Buyers" severity={aiData.fiveForces.buyers.severity} />
+            <ThreatMeter label="Substitutes" severity={aiData.fiveForces.substitutes.severity} />
           </div>
+          <p className="text-[10px] font-medium text-slate-500 mt-2.5">Industry Attractiveness: <span className={clsx(
+            "font-bold",
+            aiData.fiveForces.overallAttractiveness === "High" ? "text-emerald-600" :
+            aiData.fiveForces.overallAttractiveness === "Moderate" ? "text-amber-600" : "text-red-600"
+          )}>{aiData.fiveForces.overallAttractiveness}</span></p>
         </div>
 
         {/* Q3: VRIO Resource Advantage */}
@@ -259,13 +302,12 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
               <p className="text-[10px] text-slate-400">SWOT Synthesis</p>
             </div>
           </div>
-          <SWOTQuadrant swot={aiData.swot} />
+          <SWOTBalance swot={aiData.swot} />
         </div>
       </div>
 
       {/* AI Narrative + Priorities */}
       <div className="border-t border-slate-100">
-        {/* Strategic Narrative */}
         <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-indigo-50/30">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="h-4 w-4 text-indigo-500" />
@@ -274,7 +316,6 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           <p className="text-sm text-slate-700 leading-relaxed">{aiData.narrative}</p>
         </div>
 
-        {/* Top 3 Priorities */}
         <div className="px-6 py-4 border-t border-slate-100">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="h-4 w-4 text-slate-600" />
@@ -293,7 +334,6 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           </div>
         </div>
 
-        {/* Re-analyze button */}
         <div className="px-6 py-3 border-t border-slate-100">
           <button
             onClick={runAnalysis}
@@ -306,7 +346,6 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
         </div>
       </div>
 
-      {/* Footer */}
       {shareCode && (
         <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
           <span className="text-[10px] text-slate-400">Share Code</span>
@@ -335,18 +374,37 @@ function ScoreRow({ label, score, insight }: { label: string; score: number; ins
   );
 }
 
-function SeverityBar({ label, severity, tag }: { label: string; severity: number; tag: string }) {
-  const pct = (severity / 10) * 100;
-  const barColor = severity <= 3 ? "#10b981" : severity <= 6 ? "#f59e0b" : severity <= 8 ? "#f97316" : "#ef4444";
+// 5 Forces: Segmented threat meter (5 blocks, green→red)
+function ThreatMeter({ label, severity }: { label: string; severity: number }) {
+  const segments = 5;
+  const filledCount = Math.round((severity / 10) * segments);
+
+  const getSegmentColor = (idx: number, filled: boolean) => {
+    if (!filled) return "bg-slate-100";
+    if (idx <= 1) return "bg-emerald-400";
+    if (idx <= 2) return "bg-amber-400";
+    if (idx <= 3) return "bg-orange-400";
+    return "bg-red-500";
+  };
+
+  const textLabel = severity <= 3 ? "Low" : severity <= 6 ? "Moderate" : severity <= 8 ? "High" : "Very High";
   const textColor = severity <= 3 ? "text-emerald-600" : severity <= 6 ? "text-amber-600" : severity <= 8 ? "text-orange-600" : "text-red-600";
 
   return (
     <div className="flex items-center gap-2">
       <span className="text-[10px] text-slate-500 w-20 truncate">{label}</span>
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+      <div className="flex gap-0.5 flex-1">
+        {Array.from({ length: segments }).map((_, i) => (
+          <div
+            key={i}
+            className={clsx(
+              "h-2 flex-1 rounded-sm transition-all",
+              getSegmentColor(i, i < filledCount)
+            )}
+          />
+        ))}
       </div>
-      <span className={clsx("text-[9px] font-bold w-14 text-right", textColor)}>{tag}</span>
+      <span className={clsx("text-[9px] font-bold w-16 text-right", textColor)}>{textLabel}</span>
     </div>
   );
 }
@@ -374,8 +432,8 @@ function VRIOBar({ label, full, strength, insight }: { label: string; full: stri
   );
 }
 
-function SWOTQuadrant({ swot }: { swot: AIAnalysis["swot"] }) {
-  const total = swot.strengthsWeight + swot.weaknessesWeight + swot.opportunitiesWeight + swot.threatsWeight;
+// SWOT: Positive (S/O) vs Negative (W/T) with directional indicators
+function SWOTBalance({ swot }: { swot: AIAnalysis["swot"] }) {
   const positiveWeight = swot.strengthsWeight + swot.opportunitiesWeight;
   const negativeWeight = swot.weaknessesWeight + swot.threatsWeight;
   const balance = positiveWeight - negativeWeight;
@@ -390,13 +448,25 @@ function SWOTQuadrant({ swot }: { swot: AIAnalysis["swot"] }) {
 
   return (
     <>
+      {/* Positive factors (higher = better) */}
+      <p className="text-[9px] text-emerald-600 font-semibold mb-1 flex items-center gap-1">
+        <TrendingUp className="h-3 w-3" /> Strategic Assets <span className="text-slate-400 font-normal">(higher = stronger)</span>
+      </p>
       <div className="grid grid-cols-2 gap-1 mb-2">
-        <SWOTBlock label="Strengths" weight={swot.strengthsWeight} color="emerald" />
-        <SWOTBlock label="Weaknesses" weight={swot.weaknessesWeight} color="red" />
-        <SWOTBlock label="Opportunities" weight={swot.opportunitiesWeight} color="blue" />
-        <SWOTBlock label="Threats" weight={swot.threatsWeight} color="orange" />
+        <PositiveBlock label="Strengths" weight={swot.strengthsWeight} color="emerald" />
+        <PositiveBlock label="Opportunities" weight={swot.opportunitiesWeight} color="blue" />
       </div>
-      <div className="flex items-center gap-1.5">
+
+      {/* Negative factors (higher = worse) */}
+      <p className="text-[9px] text-red-500 font-semibold mb-1 flex items-center gap-1">
+        <AlertTriangle className="h-3 w-3" /> Strategic Risks <span className="text-slate-400 font-normal">(higher = more critical)</span>
+      </p>
+      <div className="grid grid-cols-2 gap-1 mb-2">
+        <NegativeBlock label="Weaknesses" weight={swot.weaknessesWeight} color="red" />
+        <NegativeBlock label="Threats" weight={swot.threatsWeight} color="orange" />
+      </div>
+
+      <div className="flex items-center gap-1.5 mt-1">
         {verdictIcon === "up" && <ArrowUpRight className="h-3 w-3 text-emerald-500" />}
         {verdictIcon === "down" && <ArrowDownRight className="h-3 w-3 text-red-500" />}
         {verdictIcon === "neutral" && <Minus className="h-3 w-3 text-amber-500" />}
@@ -406,25 +476,10 @@ function SWOTQuadrant({ swot }: { swot: AIAnalysis["swot"] }) {
   );
 }
 
-function SWOTBlock({ label, weight, color }: { label: string; weight: number; color: string }) {
-  const bgColors: Record<string, string> = {
-    emerald: "bg-emerald-50 border-emerald-200",
-    red: "bg-red-50 border-red-200",
-    blue: "bg-blue-50 border-blue-200",
-    orange: "bg-orange-50 border-orange-200",
-  };
-  const textColors: Record<string, string> = {
-    emerald: "text-emerald-700",
-    red: "text-red-700",
-    blue: "text-blue-700",
-    orange: "text-orange-700",
-  };
-  const barColors: Record<string, string> = {
-    emerald: "bg-emerald-400",
-    red: "bg-red-400",
-    blue: "bg-blue-400",
-    orange: "bg-orange-400",
-  };
+function PositiveBlock({ label, weight, color }: { label: string; weight: number; color: string }) {
+  const bgColors: Record<string, string> = { emerald: "bg-emerald-50 border-emerald-200", blue: "bg-blue-50 border-blue-200" };
+  const textColors: Record<string, string> = { emerald: "text-emerald-700", blue: "text-blue-700" };
+  const barColors: Record<string, string> = { emerald: "bg-emerald-400", blue: "bg-blue-400" };
 
   return (
     <div className={clsx("rounded-lg px-2 py-1.5 border", bgColors[color])}>
@@ -433,7 +488,25 @@ function SWOTBlock({ label, weight, color }: { label: string; weight: number; co
         <span className={clsx("text-[10px] font-bold", textColors[color])}>{weight}/10</span>
       </div>
       <div className="h-1 bg-white/60 rounded-full overflow-hidden">
-        <div className={clsx("h-full rounded-full transition-all", barColors[color])} style={{ width: `${weight * 10}%` }} />
+        <div className={clsx("h-full rounded-full", barColors[color])} style={{ width: `${weight * 10}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function NegativeBlock({ label, weight, color }: { label: string; weight: number; color: string }) {
+  const bgColors: Record<string, string> = { red: "bg-red-50 border-red-200", orange: "bg-orange-50 border-orange-200" };
+  const textColors: Record<string, string> = { red: "text-red-700", orange: "text-orange-700" };
+  const barColors: Record<string, string> = { red: "bg-red-400", orange: "bg-orange-400" };
+
+  return (
+    <div className={clsx("rounded-lg px-2 py-1.5 border", bgColors[color])}>
+      <div className="flex items-center justify-between mb-1">
+        <span className={clsx("text-[9px] font-semibold", textColors[color])}>{label}</span>
+        <span className={clsx("text-[10px] font-bold", textColors[color])}>{weight}/10</span>
+      </div>
+      <div className="h-1 bg-white/60 rounded-full overflow-hidden">
+        <div className={clsx("h-full rounded-full", barColors[color])} style={{ width: `${weight * 10}%` }} />
       </div>
     </div>
   );
