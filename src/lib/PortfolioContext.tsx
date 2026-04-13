@@ -42,7 +42,7 @@ export interface SwotState {
 // ── Health Card (the shareable snapshot) ──
 export interface HealthCard {
   shareCode: string;
-  ownerUID: string;
+  ownerUID?: string;
   ownerName: string;
   ownerEmail: string;
   ownerRegion: string;

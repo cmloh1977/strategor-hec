@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { usePortfolio, LANGUAGE_LABELS, LANGUAGE_FLAGS, DIFFICULTY_LABELS } from "@/lib/PortfolioContext";
-import type { AppLanguage, DifficultyLevel } from "@/lib/PortfolioContext";
+import type { AppLanguage, DifficultyLevel, HealthCard } from "@/lib/PortfolioContext";
+import { useTeam } from "@/lib/TeamContext";
 import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import StrategicHealthCard from "./StrategicHealthCard";
@@ -460,39 +461,194 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
           )}
         </div>
 
-        {/* ─── Phase 2 Unlock Banner ────────── */}
-        <div className={clsx(
-          "rounded-2xl p-6 transition-all duration-500",
-          phase2Unlocked
-            ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-xl"
-            : "bg-slate-100 border border-slate-200"
-        )}>
+        {/* ─── Team Constellation Section ────────── */}
+        <TeamSection onNavigate={onNavigate} />
+      </div>
+    </div>
+  );
+}
+
+// ── Team Section Component ──
+function TeamSection({ onNavigate }: { onNavigate: (view: string) => void }) {
+  const { team, isInTeam, isLeader, createTeam, joinTeam, leaveTeam } = useTeam();
+  const { constellationCards, myAnalysisComplete } = usePortfolio();
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [teamName, setTeamName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Build own card for team creation/joining
+  const ownCard = constellationCards.length > 0 ? constellationCards[0] : null;
+
+  const handleCreate = async () => {
+    if (!teamName.trim() || !ownCard) return;
+    setLoading(true);
+    setError(null);
+    const code = await createTeam(teamName.trim(), ownCard);
+    if (!code) setError("Failed to create team");
+    setLoading(false);
+    setShowCreateForm(false);
+  };
+
+  const handleJoin = async () => {
+    if (!joinCode.trim() || !ownCard) return;
+    setLoading(true);
+    setError(null);
+    const result = await joinTeam(joinCode.trim(), ownCard);
+    if (!result.success) setError(result.error || "Failed to join");
+    setLoading(false);
+    setShowJoinForm(false);
+  };
+
+  const copyCode = () => {
+    if (team?.joinCode) {
+      navigator.clipboard.writeText(team.joinCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // ── Already in a team ──
+  if (isInTeam && team) {
+    return (
+      <div className="rounded-2xl overflow-hidden bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-xl">
+        <div className="p-6">
           <div className="flex items-center gap-4">
-            {phase2Unlocked ? (
-              <Sparkles className="h-8 w-8 text-white/90" />
-            ) : (
-              <Lock className="h-8 w-8 text-slate-400" />
-            )}
+            <Users className="h-8 w-8 text-white/90" />
             <div className="flex-1">
-              <h3 className={clsx("font-bold text-lg", phase2Unlocked ? "text-white" : "text-slate-600")}>
-                Team Constellation View
-              </h3>
-              <p className={clsx("text-sm mt-1", phase2Unlocked ? "text-white/80" : "text-slate-400")}>
-                {phase2Unlocked
-                  ? `${constellationCards.length} Health Cards assembled. Discover cross-divisional patterns!`
-                  : `Need ${Math.max(0, 3 - constellationCards.length)} more Health Card${3 - constellationCards.length === 1 ? "" : "s"} to unlock. (${constellationCards.length}/3)`}
+              <h3 className="font-bold text-lg">{team.teamName}</h3>
+              <p className="text-sm text-white/80 mt-0.5">
+                {team.memberCards.length} member{team.memberCards.length !== 1 ? "s" : ""} · 
+                {isLeader ? " You are the leader" : ` Led by ${team.leaderName}`}
               </p>
             </div>
-            {phase2Unlocked && (
-              <button
-                onClick={() => onNavigate("constellation")}
-                className="px-6 py-3 rounded-xl bg-white text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors shadow-sm"
-              >
-                Explore Constellation →
+            <button
+              onClick={() => onNavigate("constellation")}
+              className="px-5 py-2.5 rounded-xl bg-white text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors shadow-sm"
+            >
+              Open Constellation →
+            </button>
+          </div>
+
+          {/* Team Code + Members */}
+          <div className="mt-4 flex gap-3">
+            <div className="bg-white/10 rounded-xl px-4 py-2.5 flex items-center gap-3">
+              <div>
+                <p className="text-[10px] text-white/60 uppercase tracking-wider">Team Code</p>
+                <p className="font-mono font-bold text-lg tracking-wider">{team.joinCode}</p>
+              </div>
+              <button onClick={copyCode} className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </button>
-            )}
+            </div>
+            <div className="bg-white/10 rounded-xl px-4 py-2.5 flex-1">
+              <p className="text-[10px] text-white/60 uppercase tracking-wider mb-1">Members</p>
+              <div className="flex flex-wrap gap-1.5">
+                {team.memberCards.map((c: HealthCard) => (
+                  <span key={c.shareCode || c.ownerName} className="text-[11px] bg-white/15 px-2 py-0.5 rounded-full">
+                    {c.ownerName} <span className="text-white/50">({c.businessName})</span>
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ── Not in a team yet ──
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+            <Users className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg text-slate-800">Team Constellation</h3>
+            <p className="text-sm text-slate-500">Create or join a team to unlock cross-divisional analysis</p>
+          </div>
+        </div>
+
+        {!myAnalysisComplete && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+            <p className="text-xs text-amber-700">⚠️ Complete your individual analysis first to create or join a team.</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+            <p className="text-xs text-red-700">❌ {error}</p>
+          </div>
+        )}
+
+        {/* Create / Join Buttons */}
+        {!showCreateForm && !showJoinForm && (
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowCreateForm(true)}
+              disabled={!myAnalysisComplete}
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold text-sm hover:from-indigo-700 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              Create Team
+            </button>
+            <button
+              onClick={() => setShowJoinForm(true)}
+              disabled={!myAnalysisComplete}
+              className="flex-1 py-3 rounded-xl border-2 border-indigo-200 text-indigo-700 font-semibold text-sm hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              Join Team
+            </button>
+          </div>
+        )}
+
+        {/* Create Form */}
+        {showCreateForm && (
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              placeholder="Team name (e.g. GALP Team Alpha)"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button onClick={handleCreate} disabled={loading || !teamName.trim()} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-50">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Create Team"}
+              </button>
+              <button onClick={() => setShowCreateForm(false)} className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Join Form */}
+        {showJoinForm && (
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              placeholder="Enter team code (e.g. TM-A7K3)"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-mono uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button onClick={handleJoin} disabled={loading || !joinCode.trim()} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-50">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Join Team"}
+              </button>
+              <button onClick={() => setShowJoinForm(false)} className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

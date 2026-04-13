@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/lib/AuthContext";
 import { PortfolioProvider, usePortfolio } from "@/lib/PortfolioContext";
+import { TeamProvider, useTeam } from "@/lib/TeamContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { LogOut, LayoutDashboard, BookOpen, Compass, Layers, ShieldAlert, Lock, Zap, BarChart3, MessageSquare, Target, Settings } from "lucide-react";
@@ -22,6 +23,7 @@ function SidebarContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const { portfolio, phase2Unlocked, teamCards } = usePortfolio();
+  const { team, isInTeam } = useTeam();
   const searchParams = useSearchParams();
 
   const currentView = searchParams.get("view") || "dashboard";
@@ -95,32 +97,30 @@ function SidebarContent() {
             )}
           </p>
 
-          {[
-            { id: "constellation", name: "Constellation Map", icon: BarChart3 },
-            { id: "challenges", name: "Common Challenges", icon: MessageSquare },
-            { id: "project-ideas", name: "Group Project Ideas", icon: Target },
-          ].map((item) => (
-            <Link
-              key={item.id}
-              href={phase2Unlocked ? `/journey?view=${item.id}` : "#"}
-              className={clsx(
-                "flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                currentView === item.id
-                  ? "bg-indigo-50 text-indigo-700"
-                  : phase2Unlocked
-                    ? "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    : "text-slate-300 cursor-not-allowed"
-              )}
-              onClick={(e) => { if (!phase2Unlocked) e.preventDefault(); }}
-            >
-              {phase2Unlocked ? (
-                <item.icon className={clsx("h-5 w-5", currentView === item.id ? "text-indigo-500" : "text-slate-400")} />
-              ) : (
-                <Lock className="h-5 w-5 text-slate-300" />
-              )}
-              <span>{item.name}</span>
-            </Link>
-          ))}
+          <Link
+            href={isInTeam ? "/journey?view=constellation" : "#"}
+            className={clsx(
+              "flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+              currentView === "constellation"
+                ? "bg-indigo-50 text-indigo-700"
+                : isInTeam
+                  ? "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  : "text-slate-300 cursor-not-allowed"
+            )}
+            onClick={(e) => { if (!isInTeam) e.preventDefault(); }}
+          >
+            {isInTeam ? (
+              <BarChart3 className={clsx("h-5 w-5", currentView === "constellation" ? "text-indigo-500" : "text-slate-400")} />
+            ) : (
+              <Lock className="h-5 w-5 text-slate-300" />
+            )}
+            <span>Constellation</span>
+            {team && (
+              <span className="ml-auto text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">
+                {team.memberCards.length}
+              </span>
+            )}
+          </Link>
         </nav>
       </div>
 
@@ -171,12 +171,14 @@ export default function JourneyLayout({ children }: { children: React.ReactNode 
 
   return (
     <PortfolioProvider>
-      <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
-        <SidebarContent />
-        <main className="flex-1 flex flex-col relative h-full">
-          {children}
-        </main>
-      </div>
+      <TeamProvider>
+        <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+          <SidebarContent />
+          <main className="flex-1 flex flex-col relative h-full">
+            {children}
+          </main>
+        </div>
+      </TeamProvider>
     </PortfolioProvider>
   );
 }

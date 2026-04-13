@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { usePortfolio, type HealthCard } from "@/lib/PortfolioContext";
+import { type HealthCard } from "@/lib/PortfolioContext";
+import { useTeam, type PatternData, type DimensionData, type ChatMessage } from "@/lib/TeamContext";
 import {
   Users, BarChart3, Sparkles, Map, Target, Swords, Shield, Zap,
   Loader2, Send, ArrowLeft, ChevronRight, FileDown, Star,
@@ -10,57 +11,32 @@ import {
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 
-// ── Types ──
-interface PatternData {
-  commonThreats: { theme: string; description: string; affectedDivisions: string[]; severity: string }[];
-  commonStrengths: { theme: string; description: string; divisions: string[] }[];
-  synergies: { title: string; description: string; divisions: string[] }[];
-  vrioGaps: { dimension: string; observation: string; divisions: string[] }[];
-  forcesHeatmap: Record<string, Record<string, number>>;
-  industryInsight: string;
-  teamNarrative: string;
-}
-
-interface DimensionData {
-  dimensionMapping: { pattern: string; dimensions: string[]; valueDomain: string; rationale: string }[];
-  suggestedProject: {
-    title: string; dimensions: string[]; valueDomain: string;
-    challenge: string; hypothesis: string; higherDimensionLeap: string;
-    divisionsInvolved: string[]; keyMetrics: string[]; first90Days: string[];
-  };
-  coachingQuestions: string[];
-}
-
-interface ChatMessage {
-  role: "user" | "model";
-  parts: { text: string }[];
-}
-
 // ── Main Component ──
 interface ConstellationViewProps {
   onBack: () => void;
 }
 
 export default function ConstellationView({ onBack }: ConstellationViewProps) {
-  const { constellationCards } = usePortfolio();
+  const { team, savePatterns, saveDimensions, addChatMessage } = useTeam();
   const [activeLevel, setActiveLevel] = useState<1 | 2 | 3>(1);
-  const [patterns, setPatterns] = useState<PatternData | null>(null);
-  const [dimensions, setDimensions] = useState<DimensionData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const cards = constellationCards;
+  // Read from team shared state (persisted in Firestore)
+  const cards = team?.memberCards || [];
+  const patterns = team?.patterns || null;
+  const dimensions = team?.dimensions || null;
+  const chatMessages = team?.chatMessages || [];
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // ── Fetch patterns (Level 2) ──
+  // ── Fetch patterns (Level 2) — only if not cached ──
   const fetchPatterns = async () => {
-    if (patterns) return; // cached
+    if (patterns) return;
     setLoading(true);
     try {
       const res = await fetch("/api/constellation", {
@@ -69,14 +45,16 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
         body: JSON.stringify({ cards, action: "patterns" }),
       });
       const data = await res.json();
-      if (!data.error) setPatterns(data);
+      if (!data.error) {
+        await savePatterns(data); // persist to team doc
+      }
     } catch (e) {
       console.error(e);
     }
     setLoading(false);
   };
 
-  // ── Fetch dimensions (Level 3) ──
+  // ── Fetch dimensions (Level 3) — only if not cached ──
   const fetchDimensions = async () => {
     if (dimensions) return;
     setLoading(true);
@@ -87,7 +65,9 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
         body: JSON.stringify({ cards, action: "dimensions" }),
       });
       const data = await res.json();
-      if (!data.error) setDimensions(data);
+      if (!data.error) {
+        await saveDimensions(data); // persist to team doc
+      }
     } catch (e) {
       console.error(e);
     }
@@ -100,13 +80,18 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
     if (activeLevel === 3) fetchDimensions();
   }, [activeLevel]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Send chat message ──
+  // ── Send chat message (persisted to shared team doc) ──
   const sendChat = async () => {
     if (!chatInput.trim() || chatLoading) return;
     const msg = chatInput.trim();
     setChatInput("");
-    const newMessages: ChatMessage[] = [...chatMessages, { role: "user", parts: [{ text: msg }] }];
-    setChatMessages(newMessages);
+
+    const userMsg: ChatMessage = {
+      role: "user",
+      parts: [{ text: msg }],
+      timestamp: new Date().toISOString(),
+    };
+    await addChatMessage(userMsg); // saves to Firestore immediately
     setChatLoading(true);
 
     try {
@@ -117,13 +102,22 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
           cards,
           action: "chat",
           message: msg,
-          chatHistory: newMessages.slice(0, -1),
+          chatHistory: [...chatMessages, userMsg].slice(-20), // last 20 messages for context
         }),
       });
       const data = await res.json();
-      setChatMessages([...newMessages, { role: "model", parts: [{ text: data.text || "I couldn't generate a response." }] }]);
+      const aiMsg: ChatMessage = {
+        role: "model",
+        parts: [{ text: data.text || "I couldn't generate a response." }],
+        timestamp: new Date().toISOString(),
+      };
+      await addChatMessage(aiMsg); // saves to Firestore
     } catch (e) {
-      setChatMessages([...newMessages, { role: "model", parts: [{ text: "Error communicating with the AI." }] }]);
+      await addChatMessage({
+        role: "model",
+        parts: [{ text: "Error communicating with the AI." }],
+        timestamp: new Date().toISOString(),
+      });
     }
     setChatLoading(false);
   };
