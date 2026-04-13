@@ -5,6 +5,7 @@ import { usePortfolio } from "@/lib/PortfolioContext";
 import ChatPane from "@/components/ChatPane";
 import CanvasPane from "@/components/CanvasPane";
 import PortfolioDashboard from "@/components/PortfolioDashboard";
+import ConstellationView from "@/components/ConstellationView";
 
 export default function JourneyPage() {
   const searchParams = useSearchParams();
@@ -56,21 +57,9 @@ export default function JourneyPage() {
     );
   }
 
-  // Phase 2 placeholders
-  if (view === "constellation" || view === "challenges" || view === "project-ideas") {
-    const titles: Record<string, string> = {
-      constellation: "Toyota Tsusho Constellation Map",
-      challenges: "Common Challenges",
-      "project-ideas": "Group Project Ideas",
-    };
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">{titles[view]}</h2>
-          <p className="text-slate-500">Coming soon — this module will be built next.</p>
-        </div>
-      </div>
-    );
+  // Phase 2: Team Constellation
+  if (view === "constellation") {
+    return <ConstellationView onBack={() => handleNavigate("dashboard")} />;
   }
 
   return <PortfolioDashboard onNavigate={handleNavigate} />;

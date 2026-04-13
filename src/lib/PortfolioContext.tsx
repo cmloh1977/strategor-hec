@@ -42,6 +42,7 @@ export interface SwotState {
 // ── Health Card (the shareable snapshot) ──
 export interface HealthCard {
   shareCode: string;
+  ownerUID: string;
   ownerName: string;
   ownerEmail: string;
   ownerRegion: string;
@@ -355,6 +356,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
     const healthCard: HealthCard = {
       shareCode: code,
+      ownerUID: user.uid,
       ownerName: a.ownerName,
       ownerEmail: user.email || "",
       ownerRegion: a.ownerRegion,
@@ -439,6 +441,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     const a = portfolio.myAnalysis;
     constellationCards.push({
       shareCode: portfolio.shareCode || "SELF",
+      ownerUID: user?.uid || "",
       ownerName: a.ownerName,
       ownerEmail: user?.email || "",
       ownerRegion: a.ownerRegion,
