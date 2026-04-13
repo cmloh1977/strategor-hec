@@ -66,7 +66,7 @@ interface TeamContextType {
   teamError: string | null;
 
   // Actions
-  createTeam: (teamName: string, myCard: HealthCard) => Promise<string | null>;
+  createTeam: (teamName: string, myCard: HealthCard, importedCards?: HealthCard[]) => Promise<string | null>;
   joinTeam: (code: string, myCard: HealthCard) => Promise<{ success: boolean; error?: string }>;
   leaveTeam: () => Promise<void>;
 
@@ -151,17 +151,30 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   }, [teamCode]);
 
   // ── Create Team ──
-  const createTeam = useCallback(async (teamName: string, myCard: HealthCard): Promise<string | null> => {
+  const createTeam = useCallback(async (teamName: string, myCard: HealthCard, importedCards?: HealthCard[]): Promise<string | null> => {
     if (!user) return null;
     const code = generateTeamCode();
+
+    // Combine own card + all imported cards
+    const allCards: HealthCard[] = [{ ...myCard, ownerUID: user.uid }];
+    const allUIDs: string[] = [user.uid];
+
+    if (importedCards) {
+      for (const card of importedCards) {
+        allCards.push(card);
+        if (card.ownerUID && !allUIDs.includes(card.ownerUID)) {
+          allUIDs.push(card.ownerUID);
+        }
+      }
+    }
 
     const teamDoc: TeamData = {
       teamName,
       joinCode: code,
       leaderUID: user.uid,
       leaderName: myCard.ownerName,
-      memberUIDs: [user.uid],
-      memberCards: [{ ...myCard, ownerUID: user.uid }],
+      memberUIDs: allUIDs,
+      memberCards: allCards,
       patterns: null,
       dimensions: null,
       projectCanvas: null,

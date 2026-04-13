@@ -19,7 +19,8 @@ interface ConstellationViewProps {
 export default function ConstellationView({ onBack }: ConstellationViewProps) {
   const { team, savePatterns, saveDimensions, addChatMessage } = useTeam();
   const [activeLevel, setActiveLevel] = useState<1 | 2 | 3>(1);
-  const [loading, setLoading] = useState(false);
+  const [loadingPatterns, setLoadingPatterns] = useState(false);
+  const [loadingDimensions, setLoadingDimensions] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -36,8 +37,8 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
 
   // ── Fetch patterns (Level 2) — only if not cached ──
   const fetchPatterns = async () => {
-    if (patterns) return;
-    setLoading(true);
+    if (patterns || loadingPatterns) return;
+    setLoadingPatterns(true);
     try {
       const res = await fetch("/api/constellation", {
         method: "POST",
@@ -51,13 +52,13 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
     } catch (e) {
       console.error(e);
     }
-    setLoading(false);
+    setLoadingPatterns(false);
   };
 
   // ── Fetch dimensions (Level 3) — only if not cached ──
   const fetchDimensions = async () => {
-    if (dimensions) return;
-    setLoading(true);
+    if (dimensions || loadingDimensions) return;
+    setLoadingDimensions(true);
     try {
       const res = await fetch("/api/constellation", {
         method: "POST",
@@ -71,7 +72,7 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
     } catch (e) {
       console.error(e);
     }
-    setLoading(false);
+    setLoadingDimensions(false);
   };
 
   // Auto-fetch when switching levels
@@ -167,8 +168,8 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
         {/* Main Panel */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeLevel === 1 && <Level1Grid cards={cards} />}
-          {activeLevel === 2 && (loading ? <LoadingSkeleton label="Analyzing cross-divisional patterns..." /> : patterns ? <Level2Patterns data={patterns} cards={cards} /> : null)}
-          {activeLevel === 3 && (loading ? <LoadingSkeleton label="Mapping to TTC's 4 Higher Dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
+          {activeLevel === 2 && (loadingPatterns ? <LoadingSkeleton label="Analyzing cross-divisional patterns..." /> : patterns ? <Level2Patterns data={patterns} cards={cards} /> : null)}
+          {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to TTC's 4 Higher Dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
         </div>
 
         {/* Chat Panel (always visible for Levels 2-3) */}

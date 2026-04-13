@@ -471,7 +471,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
 // ── Team Section Component ──
 function TeamSection({ onNavigate }: { onNavigate: (view: string) => void }) {
   const { team, isInTeam, isLeader, createTeam, joinTeam, leaveTeam } = useTeam();
-  const { constellationCards, myAnalysisComplete } = usePortfolio();
+  const { constellationCards, myAnalysisComplete, teamCards } = usePortfolio();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [teamName, setTeamName] = useState("");
@@ -487,7 +487,8 @@ function TeamSection({ onNavigate }: { onNavigate: (view: string) => void }) {
     if (!teamName.trim() || !ownCard) return;
     setLoading(true);
     setError(null);
-    const code = await createTeam(teamName.trim(), ownCard);
+    // Pass imported team cards so they're included in the team from the start
+    const code = await createTeam(teamName.trim(), ownCard, teamCards);
     if (!code) setError("Failed to create team");
     setLoading(false);
     setShowCreateForm(false);
@@ -525,12 +526,20 @@ function TeamSection({ onNavigate }: { onNavigate: (view: string) => void }) {
                 {isLeader ? " You are the leader" : ` Led by ${team.leaderName}`}
               </p>
             </div>
-            <button
-              onClick={() => onNavigate("constellation")}
-              className="px-5 py-2.5 rounded-xl bg-white text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors shadow-sm"
-            >
-              Open Constellation →
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { if (confirm("Leave this team? You can rejoin or create a new one.")) leaveTeam(); }}
+                className="px-4 py-2.5 rounded-xl bg-white/10 text-white/80 text-sm font-medium hover:bg-white/20 transition-colors"
+              >
+                Leave
+              </button>
+              <button
+                onClick={() => onNavigate("constellation")}
+                className="px-5 py-2.5 rounded-xl bg-white text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors shadow-sm"
+              >
+                Open Constellation →
+              </button>
+            </div>
           </div>
 
           {/* Team Code + Members */}
