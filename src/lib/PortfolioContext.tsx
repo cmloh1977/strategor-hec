@@ -241,7 +241,7 @@ interface PortfolioContextType {
   myAnalysisProgress: { done: number; total: number; percent: number };
 
   // Share Code
-  generateShareCode: () => Promise<string | null>;
+  generateShareCode: (forceUpdate?: boolean) => Promise<string | null>;
   shareCode: string | null;
 
   // Team
@@ -378,13 +378,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Actions: Share Code ──
-  const generateShareCode = async (): Promise<string | null> => {
+  const generateShareCode = async (forceUpdate?: boolean): Promise<string | null> => {
     if (!user || !portfolio.myAnalysis || !computeIsComplete(portfolio.myAnalysis)) return null;
 
-    // If already generated, return existing
-    if (portfolio.shareCode) return portfolio.shareCode;
+    // If already generated and not forcing an update, return existing
+    if (portfolio.shareCode && !forceUpdate) return portfolio.shareCode;
 
-    const code = generateCode();
+    // Reuse the existing code if we have one so we don't spam the DB with new codes for the same person
+    const code = portfolio.shareCode || generateCode();
     const a = portfolio.myAnalysis;
 
     // Try to grab the AI Analysis if it exists

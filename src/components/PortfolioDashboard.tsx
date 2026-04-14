@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePortfolio, LANGUAGE_LABELS, LANGUAGE_FLAGS, DIFFICULTY_LABELS } from "@/lib/PortfolioContext";
 import type { AppLanguage, DifficultyLevel, HealthCard } from "@/lib/PortfolioContext";
 import { useTeam } from "@/lib/TeamContext";
-import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles, Trash2 } from "lucide-react";
+import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles, Trash2, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import StrategicHealthCard from "./StrategicHealthCard";
 
@@ -86,9 +86,9 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
     }
   };
 
-  const handleGenerateCode = async () => {
+  const handleGenerateCode = async (force: boolean = false) => {
     setGenerating(true);
-    await generateShareCode();
+    await generateShareCode(force);
     setGenerating(false);
   };
 
@@ -224,12 +224,21 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                       {copied ? "Copied!" : "Copy"}
                     </button>
+                    <button
+                      onClick={() => handleGenerateCode(true)}
+                      disabled={generating}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-700 text-xs font-semibold hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      title="Regenerate this code to capture your latest AI scores"
+                    >
+                      {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      Update Data
+                    </button>
                   </div>
-                  <p className="text-[10px] text-emerald-600 mt-2">Share this code with your team members so they can import your Health Card.</p>
+                  <p className="text-[10px] text-emerald-600 mt-2">Share this code with your team members. Click "Update Data" if you've recently modified your analysis.</p>
                 </div>
               ) : (
                 <button
-                  onClick={handleGenerateCode}
+                  onClick={() => handleGenerateCode()}
                   disabled={generating}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all disabled:opacity-50 shadow-md"
                 >
@@ -378,57 +387,88 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {teamCards.map((card) => {
-                // Derive compact insights
-                const vrioMet = [card.vrio.valuable, card.vrio.rare, card.vrio.inimitable, card.vrio.organized].filter(v => v?.populated).length;
-                const sCount = card.swot.strengths.points.length;
-                const wCount = card.swot.weaknesses.points.length;
-                const oCount = card.swot.opportunities.points.length;
-                const tCount = card.swot.threats.points.length;
-                const forceTotal = [card.fiveForces.newEntrants, card.fiveForces.suppliers, card.fiveForces.rivalry, card.fiveForces.buyers, card.fiveForces.substitutes]
-                  .reduce((s, f) => s + (f?.points?.length || 0), 0);
-                const pressure = forceTotal <= 5 ? "Low" : forceTotal <= 10 ? "Med" : "High";
-                const pressureColor = pressure === "High" ? "text-red-500" : pressure === "Med" ? "text-amber-500" : "text-emerald-500";
+                const ai = card.aiAnalysis;
+                let healthScore = 0;
+                let grade = "F", gradeColor = "#ef4444";
+                let vrioElement = null;
+                let swotElement = null;
+                let marketElement = null;
 
-                const bmDepth = [card.businessModel.valueProposition, card.businessModel.valueArchitecture, card.businessModel.contributions]
-                  .reduce((s, p) => s + (p?.points?.length || 0), 0);
-                const bmScore = Math.min(5, Math.round(bmDepth / 2));
-                const swotBalance = (sCount + oCount) - (wCount + tCount);
-                const healthScore = Math.min(100, Math.round(
-                  (bmScore / 5 * 25) + ((5 - Math.min(5, Math.round(forceTotal / 3))) / 5 * 20) + (vrioMet / 4 * 30) + (Math.max(0, Math.min(5, swotBalance + 3)) / 6 * 25)
-                ));
-                let grade: string, gradeColor: string;
-                if (healthScore >= 80) { grade = "A"; gradeColor = "#10b981"; }
-                else if (healthScore >= 65) { grade = "B"; gradeColor = "#3b82f6"; }
-                else if (healthScore >= 50) { grade = "C"; gradeColor = "#f59e0b"; }
-                else if (healthScore >= 35) { grade = "D"; gradeColor = "#f97316"; }
-                else { grade = "F"; gradeColor = "#ef4444"; }
+                if (ai) {
+                  healthScore = ai.healthScore;
+                  if (healthScore >= 80) { grade = "A"; gradeColor = "#10b981"; }
+                  else if (healthScore >= 65) { grade = "B"; gradeColor = "#3b82f6"; }
+                  else if (healthScore >= 50) { grade = "C"; gradeColor = "#f59e0b"; }
+                  else if (healthScore >= 35) { grade = "D"; gradeColor = "#f97316"; }
+                  else { grade = "F"; gradeColor = "#ef4444"; }
 
-                return (
-                  <div key={card.shareCode} className="aspect-square rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden group hover:shadow-md transition-shadow flex flex-col">
-                    <div className="h-1.5 w-full flex-shrink-0" style={{ background: card.color }} />
-                    <div className="flex-1 flex flex-col items-center justify-center p-3 text-center relative">
-                      {/* Remove button */}
-                      <button
-                        onClick={() => removeTeamCard(card.shareCode)}
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                  // VRIO Competitive Advantage
+                  const adv = ai.vrio.competitiveAdvantage.toLowerCase();
+                  let advColor = "bg-slate-100 text-slate-600 border-slate-200";
+                  let advIcon = "—";
+                  let displayAdv = ai.vrio.competitiveAdvantage;
+                  
+                  if (adv.includes("sustained")) { advColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; advIcon = "🏆"; displayAdv = "Sustained Advantage"; }
+                  else if (adv.includes("temporary")) { advColor = "bg-blue-100 text-blue-700 border-blue-200"; advIcon = "⏳"; displayAdv = "Temporary Advantage"; }
+                  else if (adv.includes("parity")) { advColor = "bg-amber-100 text-amber-700 border-amber-200"; advIcon = "⚖️"; displayAdv = "Competitive Parity"; }
+                  else if (adv.includes("disadvantage")) { advColor = "bg-red-100 text-red-700 border-red-200"; advIcon = "🔻"; displayAdv = "Competitive Disadvantage"; }
 
-                      {/* Grade badge */}
-                      <div
-                        className="h-12 w-12 rounded-xl flex items-center justify-center text-xl font-black mb-2"
-                        style={{ backgroundColor: gradeColor + "18", border: `2px solid ${gradeColor}`, color: gradeColor }}
-                      >
-                        {grade}
-                      </div>
+                  vrioElement = (
+                    <div className={clsx("rounded border px-2 py-0.5 text-[9px] font-bold truncate w-[90%] mx-auto flex items-center justify-center gap-1 mb-1", advColor)} title={displayAdv}>
+                      <span>{advIcon}</span>
+                      <span className="truncate">{displayAdv}</span>
+                    </div>
+                  );
 
-                      {/* Business name */}
-                      <h4 className="font-bold text-xs text-slate-900 leading-tight truncate w-full">{card.businessName}</h4>
-                      <p className="text-[10px] text-slate-400 truncate w-full mb-2">{card.ownerName}</p>
+                  // 5F Market Attractiveness
+                  const att = ai.fiveForces.overallAttractiveness.toLowerCase();
+                  let attColor = "text-slate-500";
+                  let attIcon = "■";
+                  if (att.includes("high")) { attColor = "text-emerald-500"; attIcon = "📈"; }
+                  else if (att.includes("moderate")) { attColor = "text-amber-500"; attIcon = "⚖️"; }
+                  else if (att.includes("low")) { attColor = "text-red-500"; attIcon = "📉"; }
 
-                      {/* VRIO dots */}
-                      <div className="flex items-center gap-0.5 mb-1.5">
+                  marketElement = (
+                    <span className={clsx("text-[9px] font-bold mb-1 w-full truncate text-center", attColor)}>
+                      {attIcon} {ai.fiveForces.overallAttractiveness} Attractiveness
+                    </span>
+                  );
+
+                  // Priority
+                  const topPriority = ai.priorities?.[0]?.text || "No priority specified";
+                  swotElement = (
+                     <div className="text-[9px] text-slate-500 w-full text-center px-3 line-clamp-2 italic leading-tight" title={topPriority}>
+                       "{topPriority}"
+                     </div>
+                  );
+                } else {
+                  // Fallback for legacy lack of AI
+                  const vrioMet = [card.vrio.valuable, card.vrio.rare, card.vrio.inimitable, card.vrio.organized].filter(v => v?.populated).length;
+                  const sCount = card.swot.strengths.points.length;
+                  const wCount = card.swot.weaknesses.points.length;
+                  const oCount = card.swot.opportunities.points.length;
+                  const tCount = card.swot.threats.points.length;
+                  const forceTotal = [card.fiveForces.newEntrants, card.fiveForces.suppliers, card.fiveForces.rivalry, card.fiveForces.buyers, card.fiveForces.substitutes]
+                    .reduce((s, f) => s + (f?.points?.length || 0), 0);
+                  const pressure = forceTotal <= 5 ? "Low" : forceTotal <= 10 ? "Med" : "High";
+                  const pressureColor = pressure === "High" ? "text-red-500" : pressure === "Med" ? "text-amber-500" : "text-emerald-500";
+  
+                  const bmDepth = [card.businessModel.valueProposition, card.businessModel.valueArchitecture, card.businessModel.contributions]
+                    .reduce((s, p) => s + (p?.points?.length || 0), 0);
+                  const bmScore = Math.min(5, Math.round(bmDepth / 2));
+                  const swotBalance = (sCount + oCount) - (wCount + tCount);
+                  healthScore = Math.min(100, Math.round(
+                    (bmScore / 5 * 25) + ((5 - Math.min(5, Math.round(forceTotal / 3))) / 5 * 20) + (vrioMet / 4 * 30) + (Math.max(0, Math.min(5, swotBalance + 3)) / 6 * 25)
+                  ));
+                  
+                  if (healthScore >= 80) { grade = "A"; gradeColor = "#10b981"; }
+                  else if (healthScore >= 65) { grade = "B"; gradeColor = "#3b82f6"; }
+                  else if (healthScore >= 50) { grade = "C"; gradeColor = "#f59e0b"; }
+                  else if (healthScore >= 35) { grade = "D"; gradeColor = "#f97316"; }
+                  else { grade = "F"; gradeColor = "#ef4444"; }
+
+                  vrioElement = (
+                      <div className="flex items-center justify-center gap-0.5 mb-1.5 w-full">
                         {["V","R","I","O"].map((l, i) => (
                           <div key={l} className={clsx(
                             "h-4 w-4 rounded text-[8px] font-bold flex items-center justify-center",
@@ -436,19 +476,58 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                           )}>{l}</div>
                         ))}
                       </div>
+                  );
 
-                      {/* SWOT mini row */}
-                      <div className="flex items-center gap-1 text-[9px] mb-1">
+                  swotElement = (
+                      <div className="flex items-center justify-center gap-1 text-[9px] mb-1 w-full">
                         <span className="text-emerald-600 font-bold">{sCount}S</span>
                         <span className="text-red-400 font-bold">{wCount}W</span>
                         <span className="text-blue-500 font-bold">{oCount}O</span>
                         <span className="text-orange-400 font-bold">{tCount}T</span>
                       </div>
+                  );
 
-                      {/* Pressure */}
-                      <span className={clsx("text-[9px] font-bold", pressureColor)}>
+                  marketElement = (
+                      <span className={clsx("text-[9px] font-bold truncate w-full text-center mb-1", pressureColor)}>
                         {pressure === "High" ? "⬆" : pressure === "Med" ? "■" : "⬇"} {pressure} pressure
                       </span>
+                  );
+                }
+
+                return (
+                  <div key={card.shareCode} className="aspect-square rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden group hover:shadow-md transition-shadow flex flex-col">
+                    <div className="h-1.5 w-full flex-shrink-0" style={{ background: card.color }} />
+                    <div className="flex-1 flex flex-col items-center justify-center py-3 text-center relative">
+                      {/* Remove button */}
+                      <button
+                        onClick={() => removeTeamCard(card.shareCode)}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all z-10"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Grade badge */}
+                      <div className="relative mb-2">
+                        <div
+                          className="h-12 w-12 rounded-xl flex items-center justify-center text-xl font-black"
+                          style={{ backgroundColor: gradeColor + "18", border: `2px solid ${gradeColor}`, color: gradeColor }}
+                        >
+                          {grade}
+                        </div>
+                        {ai && (
+                          <div className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center border border-indigo-200" title="Grade based on AI Health Score">
+                            <Sparkles className="w-2.5 h-2.5" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Business name */}
+                      <h4 className="font-bold text-xs text-slate-900 leading-tight truncate w-full px-2" title={card.businessName}>{card.businessName}</h4>
+                      <p className="text-[10px] text-slate-400 truncate w-full mb-2 px-2" title={card.ownerName}>{card.ownerName}</p>
+
+                      {vrioElement}
+                      {marketElement}
+                      {swotElement}
                     </div>
                     {/* Footer */}
                     <div className="px-3 py-1.5 border-t border-slate-50 text-center flex-shrink-0">

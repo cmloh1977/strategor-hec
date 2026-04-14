@@ -329,15 +329,19 @@ function Level1Grid({ cards }: { cards: HealthCard[] }) {
         <div className="relative" style={{ height: 420 }}>
           {/* Y-axis label */}
           <div className="absolute -left-1 top-0 bottom-0 flex items-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
-              Market Dynamism (5 Forces) →
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
+              <span className="font-normal opacity-60">STABLE</span>
+              <span>← Market Dynamism (5 Forces) →</span>
+              <span className="font-normal opacity-60">INTENSE (HIGH CHANGE)</span>
             </span>
           </div>
 
           {/* X-axis label */}
           <div className="absolute bottom-0 left-8 right-0 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Competitive Strength (VRIO + Business Model) →
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-2">
+              <span className="font-normal opacity-60">WEAK</span>
+              <span>← Competitive Strength (VRIO + Business Model) →</span>
+              <span className="font-normal opacity-60">STRONG</span>
             </span>
           </div>
 
@@ -407,21 +411,44 @@ function Level1Grid({ cards }: { cards: HealthCard[] }) {
 
                   {/* Tooltip */}
                   {isHovered && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-900 text-white rounded-xl px-4 py-3 text-[11px] whitespace-nowrap shadow-2xl z-50 pointer-events-none">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-900 text-white rounded-xl px-4 py-3 text-[11px] shadow-2xl z-50 pointer-events-none w-max max-w-[280px]">
                       <p className="font-bold text-sm mb-1">{d.card.businessName}</p>
-                      <p className="text-slate-300 text-[10px] mb-2">{d.card.ownerName} · {d.card.ownerRegion}</p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-                        <span className="text-slate-400">VRIO:</span>
-                        <span className="font-medium">{d.vrioMet}/4 dimensions</span>
-                        <span className="text-slate-400">Business Model:</span>
-                        <span className="font-medium">{d.bmPoints} points</span>
-                        <span className="text-slate-400">5 Forces:</span>
-                        <span className="font-medium">{d.fiveTotal} factors</span>
-                        <span className="text-slate-400">SWOT:</span>
-                        <span className="font-medium text-emerald-400">+{d.swotPos}</span>
-                        <span className="text-slate-400"></span>
-                        <span className="font-medium text-red-400">-{d.swotNeg}</span>
-                      </div>
+                      <p className="text-slate-300 text-[10px] mb-3">{d.card.ownerName} · {d.card.ownerRegion}</p>
+                      
+                      {d.ai ? (
+                        <div className="flex flex-col gap-1.5 text-[10px] mb-2">
+                           <div className="flex items-start gap-2">
+                             <span className="text-slate-400 w-16 flex-shrink-0">Health:</span>
+                             <span className="font-bold text-indigo-300">{d.ai.healthScore} / 100 ✨</span>
+                           </div>
+                           <div className="flex items-start gap-2">
+                             <span className="text-slate-400 w-16 flex-shrink-0">Advantage:</span>
+                             <span className="font-medium whitespace-nowrap">{d.ai.vrio.competitiveAdvantage.replace('Sustained', 'Sustained Advantage').replace('Temporary', 'Temporary Advantage').replace('Parity', 'Competitive Parity').replace('Disadvantage', 'Competitive Disadvantage')}</span>
+                           </div>
+                           <div className="flex items-start gap-2">
+                             <span className="text-slate-400 w-16 flex-shrink-0">Market:</span>
+                             <span className="font-medium whitespace-nowrap">{d.ai.fiveForces.overallAttractiveness} Attractiveness</span>
+                           </div>
+                           <div className="flex items-start gap-2 mt-1">
+                             <span className="text-slate-400 w-16 flex-shrink-0">Priority:</span>
+                             <span className="font-medium italic text-slate-300 whitespace-normal leading-tight">"{d.ai.priorities?.[0]?.text || ''}"</span>
+                           </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] mb-2">
+                          <span className="text-slate-400">VRIO:</span>
+                          <span className="font-medium">{d.vrioMet}/4 dimensions</span>
+                          <span className="text-slate-400">Business Model:</span>
+                          <span className="font-medium">{d.bmPoints} points</span>
+                          <span className="text-slate-400">5 Forces:</span>
+                          <span className="font-medium">{d.fiveTotal} factors</span>
+                          <span className="text-slate-400">SWOT:</span>
+                          <span className="font-medium text-emerald-400">+{d.swotPos}</span>
+                          <span className="text-slate-400"></span>
+                          <span className="font-medium text-red-400">-{d.swotNeg}</span>
+                        </div>
+                      )}
+
                       <div className="mt-2 pt-2 border-t border-slate-700 text-[10px]">
                         <span className="text-slate-400">Quadrant: </span>
                         <span className="font-semibold">{quadrantInfo[quadrant].icon} {quadrantInfo[quadrant].label}</span>
@@ -477,32 +504,60 @@ function Level1Grid({ cards }: { cards: HealthCard[] }) {
             const q = getQuadrant(d.strengthScore, d.dynamismScore);
             const colors = { growth: "border-blue-300", core: "border-slate-300", nurture: "border-emerald-300", restructure: "border-amber-300" };
             return (
-              <div key={d.card.shareCode} className={clsx("bg-white rounded-xl border-2 shadow-sm overflow-hidden", colors[q])}>
-                <div className="px-4 py-2.5" style={{ backgroundColor: d.card.color + "10", borderBottom: `2px solid ${d.card.color}` }}>
-                  <h5 className="text-xs font-bold text-slate-800 truncate">{d.card.businessName}</h5>
-                  <p className="text-[9px] text-slate-500">{d.card.ownerName} · {d.card.ownerRegion}</p>
-                </div>
-                <div className="px-4 py-2.5 grid grid-cols-4 gap-2 text-[9px]">
-                  <div>
-                    <span className="text-slate-400 block">VRIO</span>
-                    <span className="font-bold text-slate-700">{d.vrioMet}/4</span>
+              <div key={d.card.shareCode} className={clsx("bg-white rounded-xl border-2 shadow-sm overflow-hidden flex flex-col justify-between", colors[q])}>
+                <div>
+                  <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: d.card.color + "10", borderBottom: `2px solid ${d.card.color}` }}>
+                    <div className="overflow-hidden">
+                      <h5 className="text-xs font-bold text-slate-800 truncate">{d.card.businessName}</h5>
+                      <p className="text-[9px] text-slate-500 truncate">{d.card.ownerName} · {d.card.ownerRegion}</p>
+                    </div>
+                    <div className="text-[10px] whitespace-nowrap font-semibold ml-2">
+                      {quadrantInfo[q].icon} <span className={clsx("hidden sm:inline", quadrantInfo[q].color)}>{quadrantInfo[q].label}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block">BM</span>
-                    <span className="font-bold text-slate-700">{d.bmPoints}pts</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">5F</span>
-                    <span className="font-bold text-slate-700">{d.fiveTotal}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">SWOT</span>
-                    <span className="font-bold text-emerald-600">+{d.swotPos}</span>
-                    <span className="font-bold text-red-500 ml-0.5">-{d.swotNeg}</span>
-                  </div>
-                </div>
-                <div className="px-4 py-1.5 bg-slate-50 text-[9px] text-slate-500">
-                  {quadrantInfo[q].icon} {quadrantInfo[q].label}
+                  
+                  {d.ai ? (
+                    <div className="px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between mb-2.5 gap-2">
+                        <div className="flex items-center gap-1.5 text-[10px]">
+                          <span className="font-bold text-indigo-600 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                            <Sparkles className="w-2.5 h-2.5" /> {d.ai.healthScore}/100 Health
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wider">
+                          <span className="text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            {d.ai.vrio.competitiveAdvantage.replace('Sustained', 'Sustained Advantage').replace('Temporary', 'Temporary Advantage').replace('Parity', 'Competitive Parity').replace('Disadvantage', 'Competitive Disadvantage')}
+                          </span>
+                          <span className="text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            {d.ai.fiveForces.overallAttractiveness} Attractiveness
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50/80 rounded-lg p-2.5 text-[10px] text-slate-600 leading-relaxed italic text-justify line-clamp-3">
+                        "{d.ai.narrative}"
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-3 grid grid-cols-4 gap-2 text-[10px]">
+                      <div>
+                        <span className="text-slate-400 block mb-0.5">VRIO</span>
+                        <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{d.vrioMet}/4</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block mb-0.5">BM</span>
+                        <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{d.bmPoints}pts</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block mb-0.5">5F</span>
+                        <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{d.fiveTotal}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block mb-0.5">SWOT</span>
+                        <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-l border-y border-l border-emerald-200">+{d.swotPos}</span>
+                        <span className="font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded-r border-y border-r border-red-200">-{d.swotNeg}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );
