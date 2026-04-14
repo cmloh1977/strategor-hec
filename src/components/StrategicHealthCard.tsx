@@ -6,44 +6,13 @@ import clsx from "clsx";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/AuthContext";
-import type { MyAnalysis } from "@/lib/PortfolioContext";
+import type { MyAnalysis, AIAnalysis } from "@/lib/PortfolioContext";
 
 interface StrategicHealthCardProps {
   analysis: MyAnalysis;
   shareCode: string | null;
 }
 
-interface AIAnalysis {
-  businessModel: {
-    valueProposition: { score: number; insight: string };
-    valueArchitecture: { score: number; insight: string };
-    contributions: { score: number; insight: string };
-  };
-  fiveForces: {
-    newEntrants: { severity: number; label: string };
-    suppliers: { severity: number; label: string };
-    rivalry: { severity: number; label: string };
-    buyers: { severity: number; label: string };
-    substitutes: { severity: number; label: string };
-    overallAttractiveness: string;
-  };
-  vrio: {
-    valuable: { strength: number; insight: string };
-    rare: { strength: number; insight: string };
-    inimitable: { strength: number; insight: string };
-    organized: { strength: number; insight: string };
-    competitiveAdvantage: string;
-  };
-  swot: {
-    strengthsWeight: number;
-    weaknessesWeight: number;
-    opportunitiesWeight: number;
-    threatsWeight: number;
-  };
-  narrative: string;
-  priorities: { urgency: string; text: string }[];
-  healthScore: number;
-}
 
 function getGradeInfo(score: number) {
   if (score >= 80) return { grade: "A", color: "#10b981" };

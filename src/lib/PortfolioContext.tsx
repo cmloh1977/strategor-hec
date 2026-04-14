@@ -39,6 +39,38 @@ export interface SwotState {
   threats: PillarData;
 }
 
+export interface AIAnalysis {
+  businessModel: {
+    valueProposition: { score: number; insight: string };
+    valueArchitecture: { score: number; insight: string };
+    contributions: { score: number; insight: string };
+  };
+  fiveForces: {
+    newEntrants: { severity: number; label: string };
+    suppliers: { severity: number; label: string };
+    rivalry: { severity: number; label: string };
+    buyers: { severity: number; label: string };
+    substitutes: { severity: number; label: string };
+    overallAttractiveness: string;
+  };
+  vrio: {
+    valuable: { strength: number; insight: string };
+    rare: { strength: number; insight: string };
+    inimitable: { strength: number; insight: string };
+    organized: { strength: number; insight: string };
+    competitiveAdvantage: string;
+  };
+  swot: {
+    strengthsWeight: number;
+    weaknessesWeight: number;
+    opportunitiesWeight: number;
+    threatsWeight: number;
+  };
+  narrative: string;
+  priorities: { urgency: string; text: string }[];
+  healthScore: number;
+}
+
 // ── Health Card (the shareable snapshot) ──
 export interface HealthCard {
   shareCode: string;
@@ -55,6 +87,7 @@ export interface HealthCard {
   swot: SwotState;
   industryAttractiveness: number;
   competitiveStrength: number;
+  aiAnalysis?: AIAnalysis; // Include the AI scores if they generated them
 }
 
 // ── Language & Difficulty ──
@@ -354,6 +387,20 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     const code = generateCode();
     const a = portfolio.myAnalysis;
 
+    // Try to grab the AI Analysis if it exists
+    let aiAnalysisScore: AIAnalysis | undefined = undefined;
+    try {
+      const snap = await getDoc(doc(db, "users", user.uid, "portfolio", "healthAnalysis"));
+      if (snap.exists()) {
+        const cached = snap.data() as AIAnalysis & { businessName?: string };
+        if (cached.businessName === a.businessName) {
+          aiAnalysisScore = cached;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load health analysis for share code:", e);
+    }
+
     const healthCard: HealthCard = {
       shareCode: code,
       ownerUID: user.uid,
@@ -369,6 +416,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       swot: a.swot,
       industryAttractiveness: computeAttractiveness(a.fiveForces),
       competitiveStrength: computeStrength(a.vrio),
+      ...(aiAnalysisScore ? { aiAnalysis: aiAnalysisScore } : {})
     };
 
     try {

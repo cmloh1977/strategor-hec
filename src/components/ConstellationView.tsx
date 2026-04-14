@@ -254,25 +254,48 @@ function Level1Grid({ cards }: { cards: HealthCard[] }) {
 
   // ── Calculate scores for each card ──
   const plotData = cards.map((card) => {
-    // X-axis: Competitive Strength (VRIO completeness + BM depth)
+    const ai = card.aiAnalysis;
+
+    // Fallbacks if AI analysis is missing
     const vrioMet = [card.vrio.valuable.populated, card.vrio.rare.populated, card.vrio.inimitable.populated, card.vrio.organized.populated].filter(Boolean).length;
     const bmPoints = card.businessModel.valueProposition.points.length + card.businessModel.valueArchitecture.points.length + card.businessModel.contributions.points.length;
-    // Normalize: VRIO (0-4) contributes 60%, BM depth (0-10+) contributes 40%
-    const strengthScore = (vrioMet / 4) * 60 + Math.min(bmPoints / 10, 1) * 40;
-
-    // Y-axis: Market Dynamism (5 Forces intensity — more forces = more dynamic/competitive market)
     const fiveTotal = card.fiveForces.newEntrants.points.length + card.fiveForces.suppliers.points.length + card.fiveForces.rivalry.points.length + card.fiveForces.buyers.points.length + card.fiveForces.substitutes.points.length;
-    const dynamismScore = Math.min(fiveTotal / 25, 1) * 100;
-
-    // Bubble size: SWOT completeness (total S+W+O+T points)
-    const swotTotal = card.swot.strengths.points.length + card.swot.weaknesses.points.length + card.swot.opportunities.points.length + card.swot.threats.points.length;
-    const bubbleSize = Math.max(36, Math.min(64, 28 + swotTotal * 3));
-
-    // SWOT net balance for color intensity
+    
+    // SWOT counts
     const swotPos = card.swot.strengths.points.length + card.swot.opportunities.points.length;
     const swotNeg = card.swot.weaknesses.points.length + card.swot.threats.points.length;
+    const swotTotal = swotPos + swotNeg;
 
-    return { card, strengthScore, dynamismScore, bubbleSize, vrioMet, bmPoints, fiveTotal, swotTotal, swotPos, swotNeg };
+    let strengthScore, dynamismScore, bubbleSize;
+
+    if (ai) {
+      // 1. Competitive Strength (X-axis)
+      // VRIO max is 20 (4 dimensions * 5 max). BM max is 15 (3 sections * 5 max).
+      const vrioTotal = ai.vrio.valuable.strength + ai.vrio.rare.strength + ai.vrio.inimitable.strength + ai.vrio.organized.strength;
+      const bmTotal = ai.businessModel.valueProposition.score + ai.businessModel.valueArchitecture.score + ai.businessModel.contributions.score;
+      
+      const vrioNorm = (vrioTotal / 20) * 100; // 0-100
+      const bmNorm = (bmTotal / 15) * 100; // 0-100
+      
+      strengthScore = (vrioNorm * 0.6) + (bmNorm * 0.4);
+
+      // 2. Market Dynamism (Y-axis - 5 Forces Threat Level)
+      // Max threat is 50 (5 forces * 10 max severity).
+      const forcesTotal = ai.fiveForces.newEntrants.severity + ai.fiveForces.suppliers.severity + ai.fiveForces.rivalry.severity + ai.fiveForces.buyers.severity + ai.fiveForces.substitutes.severity;
+      dynamismScore = (forcesTotal / 50) * 100;
+
+      // 3. Bubble Size (SWOT magnitude)
+      // Max weight is 40.
+      const aiSwotTotal = ai.swot.strengthsWeight + ai.swot.weaknessesWeight + ai.swot.opportunitiesWeight + ai.swot.threatsWeight;
+      bubbleSize = Math.max(36, Math.min(64, 28 + (aiSwotTotal / 40) * 36));
+    } else {
+      // Fallback to legacy counting method if AI data is missing
+      strengthScore = (vrioMet / 4) * 60 + Math.min(bmPoints / 10, 1) * 40;
+      dynamismScore = Math.min(fiveTotal / 25, 1) * 100;
+      bubbleSize = Math.max(36, Math.min(64, 28 + swotTotal * 3));
+    }
+
+    return { card, strengthScore, dynamismScore, bubbleSize, vrioMet, bmPoints, fiveTotal, swotTotal, swotPos, swotNeg, ai };
   });
 
   // Determine quadrant for a data point (right=strong, top=dynamic)
