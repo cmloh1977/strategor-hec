@@ -249,156 +249,243 @@ function LoadingSkeleton({ label }: { label: string }) {
   );
 }
 
-// ═══════════════════════════════════════
-// LEVEL 1: Cross-Divisional Comparison
-// ═══════════════════════════════════════
-
 function Level1Grid({ cards }: { cards: HealthCard[] }) {
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+
+  // ── Calculate scores for each card ──
+  const plotData = cards.map((card) => {
+    // X-axis: Competitive Strength (VRIO completeness + BM depth)
+    const vrioMet = [card.vrio.valuable.populated, card.vrio.rare.populated, card.vrio.inimitable.populated, card.vrio.organized.populated].filter(Boolean).length;
+    const bmPoints = card.businessModel.valueProposition.points.length + card.businessModel.valueArchitecture.points.length + card.businessModel.contributions.points.length;
+    // Normalize: VRIO (0-4) contributes 60%, BM depth (0-10+) contributes 40%
+    const strengthScore = (vrioMet / 4) * 60 + Math.min(bmPoints / 10, 1) * 40;
+
+    // Y-axis: Market Dynamism (5 Forces intensity — more forces = more dynamic/competitive market)
+    const fiveTotal = card.fiveForces.newEntrants.points.length + card.fiveForces.suppliers.points.length + card.fiveForces.rivalry.points.length + card.fiveForces.buyers.points.length + card.fiveForces.substitutes.points.length;
+    const dynamismScore = Math.min(fiveTotal / 25, 1) * 100;
+
+    // Bubble size: SWOT completeness (total S+W+O+T points)
+    const swotTotal = card.swot.strengths.points.length + card.swot.weaknesses.points.length + card.swot.opportunities.points.length + card.swot.threats.points.length;
+    const bubbleSize = Math.max(36, Math.min(64, 28 + swotTotal * 3));
+
+    // SWOT net balance for color intensity
+    const swotPos = card.swot.strengths.points.length + card.swot.opportunities.points.length;
+    const swotNeg = card.swot.weaknesses.points.length + card.swot.threats.points.length;
+
+    return { card, strengthScore, dynamismScore, bubbleSize, vrioMet, bmPoints, fiveTotal, swotTotal, swotPos, swotNeg };
+  });
+
+  // Determine quadrant for a data point (right=strong, top=dynamic)
+  const getQuadrant = (strength: number, dynamism: number) => {
+    if (strength >= 50 && dynamism >= 50) return "growth";
+    if (strength >= 50 && dynamism < 50) return "core";
+    if (strength < 50 && dynamism >= 50) return "restructure";
+    return "nurture";
+  };
+
+  const quadrantInfo = {
+    growth: { label: "Growth Business", icon: "🚀", color: "text-blue-800", desc: "Accelerate growth by concentrating resources" },
+    core: { label: "Core Business", icon: "🛡️", color: "text-slate-700", desc: "Improve efficiency and polish strengths" },
+    nurture: { label: "Nurturing Business", icon: "🌱", color: "text-emerald-700", desc: "Bold challenges for future growth" },
+    restructure: { label: "Restructuring Zone", icon: "⚠️", color: "text-amber-700", desc: "Reevaluate and reallocate resources" },
+  };
+
+  // Count divisions per quadrant
+  const quadrantCounts = { growth: 0, core: 0, nurture: 0, restructure: 0 };
+  plotData.forEach(d => { quadrantCounts[getQuadrant(d.strengthScore, d.dynamismScore)]++; });
+
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-bold text-slate-800 mb-1">Cross-Divisional Overview</h3>
-        <p className="text-sm text-slate-500">Compare all team members&apos; strategic analyses side by side.</p>
+        <h3 className="text-lg font-bold text-slate-800 mb-1">Strategic Portfolio Grid</h3>
+        <p className="text-sm text-slate-500">Each division plotted by Competitive Strength × Market Dynamism</p>
       </div>
 
-      {/* Mini Health Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map((card) => (
-          <MiniHealthCard key={card.shareCode} card={card} />
-        ))}
-      </div>
-
-      {/* Comparative Matrix */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-          <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-indigo-500" /> Framework Comparison
-          </h4>
-        </div>
-        
-        {/* Business Model Row */}
-        <div className="px-5 py-3 border-b border-slate-50">
-          <div className="flex items-center gap-2 mb-2">
-            <Target className="h-3.5 w-3.5 text-blue-500" />
-            <span className="text-xs font-semibold text-slate-600">Business Model Depth</span>
+      {/* ── The 2×2 Grid ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div className="relative" style={{ height: 420 }}>
+          {/* Y-axis label */}
+          <div className="absolute -left-1 top-0 bottom-0 flex items-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
+              Market Dynamism (5 Forces) →
+            </span>
           </div>
-          <div className="flex gap-2">
-            {cards.map((c) => {
-              const count = (c.businessModel.valueProposition.points.length + c.businessModel.valueArchitecture.points.length + c.businessModel.contributions.points.length);
+
+          {/* X-axis label */}
+          <div className="absolute bottom-0 left-8 right-0 text-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Competitive Strength (VRIO + Business Model) →
+            </span>
+          </div>
+
+          {/* Grid area */}
+          <div className="absolute left-8 top-0 right-0 bottom-6 border-l-2 border-b-2 border-slate-200">
+            {/* Quadrant backgrounds */}
+            <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
+              {/* Top-Left: Restructuring (weak + dynamic) */}
+              <div className="bg-amber-50/60 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
+                <span className="text-[10px] font-bold text-amber-600/80">⚠️ Restructuring</span>
+                <span className="text-[8px] text-amber-500/70 mt-0.5">Reevaluate & reallocate</span>
+              </div>
+              {/* Top-Right: Growth (strong + dynamic) */}
+              <div className="bg-blue-50/60 border-b border-dashed border-slate-200 p-3 flex flex-col items-end">
+                <span className="text-[10px] font-bold text-blue-600/80">🚀 Growth Business</span>
+                <span className="text-[8px] text-blue-500/70 mt-0.5">Accelerate & expand</span>
+              </div>
+              {/* Bottom-Left: Nurturing (weak + stable) */}
+              <div className="bg-emerald-50/40 border-r border-dashed border-slate-200 p-3 flex flex-col justify-end">
+                <span className="text-[8px] text-emerald-500/70 mb-0.5">Build for the future</span>
+                <span className="text-[10px] font-bold text-emerald-600/80">🌱 Nurturing</span>
+              </div>
+              {/* Bottom-Right: Core (strong + stable) */}
+              <div className="bg-slate-50/60 p-3 flex flex-col items-end justify-end">
+                <span className="text-[8px] text-slate-400 mb-0.5">Improve efficiency</span>
+                <span className="text-[10px] font-bold text-slate-500">🛡️ Core Business</span>
+              </div>
+            </div>
+
+            {/* Center crosshair labels */}
+            <div className="absolute left-1/2 top-0 bottom-0 w-px border-l border-dashed border-slate-300" />
+            <div className="absolute top-1/2 left-0 right-0 h-px border-t border-dashed border-slate-300" />
+
+            {/* Bubbles */}
+            {plotData.map((d) => {
+              const x = Math.max(5, Math.min(95, d.strengthScore));
+              const y = Math.max(5, Math.min(95, 100 - d.dynamismScore)); // invert Y so high dynamism is top
+              const quadrant = getQuadrant(d.strengthScore, d.dynamismScore);
+              const isHovered = hoveredCard === d.card.shareCode;
+              const bubbleColor = quadrant === "growth" ? "bg-blue-500" : quadrant === "core" ? "bg-slate-500" : quadrant === "nurture" ? "bg-emerald-500" : "bg-amber-500";
+              const ringColor = quadrant === "growth" ? "ring-blue-200" : quadrant === "core" ? "ring-slate-200" : quadrant === "nurture" ? "ring-emerald-200" : "ring-amber-200";
+
               return (
-                <div key={c.shareCode} className="flex-1">
-                  <div className="text-[10px] text-slate-400 mb-1 truncate">{c.ownerName}</div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${Math.min(100, count * 10)}%` }} />
+                <div
+                  key={d.card.shareCode}
+                  className="absolute transition-all duration-300 ease-out cursor-pointer group"
+                  style={{
+                    left: `${x}%`,
+                    top: `${y}%`,
+                    transform: `translate(-50%, -50%) scale(${isHovered ? 1.2 : 1})`,
+                    zIndex: isHovered ? 50 : 10,
+                  }}
+                  onMouseEnter={() => setHoveredCard(d.card.shareCode)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
+                  {/* Bubble */}
+                  <div
+                    className={clsx(
+                      "rounded-full flex items-center justify-center text-white font-bold text-[9px] shadow-lg ring-2 transition-shadow",
+                      bubbleColor, ringColor,
+                      isHovered ? "shadow-xl ring-4" : "shadow-md"
+                    )}
+                    style={{ width: d.bubbleSize, height: d.bubbleSize }}
+                  >
+                    {d.card.ownerName?.split(" ")[0]?.substring(0, 4)}
                   </div>
-                  <div className="text-[9px] text-slate-500 mt-0.5">{count} points</div>
+
+                  {/* Tooltip */}
+                  {isHovered && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-900 text-white rounded-xl px-4 py-3 text-[11px] whitespace-nowrap shadow-2xl z-50 pointer-events-none">
+                      <p className="font-bold text-sm mb-1">{d.card.businessName}</p>
+                      <p className="text-slate-300 text-[10px] mb-2">{d.card.ownerName} · {d.card.ownerRegion}</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                        <span className="text-slate-400">VRIO:</span>
+                        <span className="font-medium">{d.vrioMet}/4 dimensions</span>
+                        <span className="text-slate-400">Business Model:</span>
+                        <span className="font-medium">{d.bmPoints} points</span>
+                        <span className="text-slate-400">5 Forces:</span>
+                        <span className="font-medium">{d.fiveTotal} factors</span>
+                        <span className="text-slate-400">SWOT:</span>
+                        <span className="font-medium text-emerald-400">+{d.swotPos}</span>
+                        <span className="text-slate-400"></span>
+                        <span className="font-medium text-red-400">-{d.swotNeg}</span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-slate-700 text-[10px]">
+                        <span className="text-slate-400">Quadrant: </span>
+                        <span className="font-semibold">{quadrantInfo[quadrant].icon} {quadrantInfo[quadrant].label}</span>
+                      </div>
+                      {/* Arrow pointer */}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-slate-900" />
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
-
-        {/* 5 Forces Row */}
-        <div className="px-5 py-3 border-b border-slate-50">
-          <div className="flex items-center gap-2 mb-2">
-            <Swords className="h-3.5 w-3.5 text-red-500" />
-            <span className="text-xs font-semibold text-slate-600">Competitive Pressure</span>
-          </div>
-          <div className="flex gap-2">
-            {cards.map((c) => {
-              const total = c.fiveForces.newEntrants.points.length + c.fiveForces.suppliers.points.length + c.fiveForces.rivalry.points.length + c.fiveForces.buyers.points.length + c.fiveForces.substitutes.points.length;
-              return (
-                <div key={c.shareCode} className="flex-1">
-                  <div className="text-[10px] text-slate-400 mb-1 truncate">{c.ownerName}</div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-400 rounded-full" style={{ width: `${Math.min(100, total * 6)}%` }} />
-                  </div>
-                  <div className="text-[9px] text-slate-500 mt-0.5">{total} factors</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* VRIO Row */}
-        <div className="px-5 py-3 border-b border-slate-50">
-          <div className="flex items-center gap-2 mb-2">
-            <Shield className="h-3.5 w-3.5 text-emerald-500" />
-            <span className="text-xs font-semibold text-slate-600">VRIO Strength</span>
-          </div>
-          <div className="flex gap-2">
-            {cards.map((c) => {
-              const met = [c.vrio.valuable.populated, c.vrio.rare.populated, c.vrio.inimitable.populated, c.vrio.organized.populated].filter(Boolean).length;
-              return (
-                <div key={c.shareCode} className="flex-1">
-                  <div className="text-[10px] text-slate-400 mb-1 truncate">{c.ownerName}</div>
-                  <div className="flex gap-0.5">
-                    {["V", "R", "I", "O"].map((l, i) => (
-                      <div key={l} className={clsx("flex-1 h-5 rounded text-[8px] font-bold flex items-center justify-center",
-                        [c.vrio.valuable.populated, c.vrio.rare.populated, c.vrio.inimitable.populated, c.vrio.organized.populated][i]
-                          ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-300"
-                      )}>{l}</div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* SWOT Row */}
-        <div className="px-5 py-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Zap className="h-3.5 w-3.5 text-amber-500" />
-            <span className="text-xs font-semibold text-slate-600">SWOT Balance</span>
-          </div>
-          <div className="flex gap-2">
-            {cards.map((c) => {
-              const pos = c.swot.strengths.points.length + c.swot.opportunities.points.length;
-              const neg = c.swot.weaknesses.points.length + c.swot.threats.points.length;
-              return (
-                <div key={c.shareCode} className="flex-1">
-                  <div className="text-[10px] text-slate-400 mb-1 truncate">{c.ownerName}</div>
-                  <div className="flex gap-1 text-[9px]">
-                    <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">+{pos}</span>
-                    <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">-{neg}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
-    </div>
-  );
-}
 
-function MiniHealthCard({ card }: { card: HealthCard }) {
-  const vrioMet = [card.vrio.valuable.populated, card.vrio.rare.populated, card.vrio.inimitable.populated, card.vrio.organized.populated].filter(Boolean).length;
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-      <div className="px-4 py-3" style={{ backgroundColor: card.color + "12", borderBottom: `2px solid ${card.color}` }}>
-        <h5 className="text-sm font-bold text-slate-800 truncate">{card.businessName}</h5>
-        <p className="text-[10px] text-slate-500">{card.ownerName} · {card.ownerRegion}</p>
+      {/* ── Quadrant Summary Cards ── */}
+      <div className="grid grid-cols-2 gap-3">
+        {(["growth", "core", "nurture", "restructure"] as const).map((q) => {
+          const info = quadrantInfo[q];
+          const count = quadrantCounts[q];
+          const divisions = plotData.filter(d => getQuadrant(d.strengthScore, d.dynamismScore) === q);
+          const bgColors = { growth: "bg-blue-50 border-blue-200", core: "bg-slate-50 border-slate-200", nurture: "bg-emerald-50 border-emerald-200", restructure: "bg-amber-50 border-amber-200" };
+          return (
+            <div key={q} className={clsx("rounded-xl border p-3", bgColors[q])}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm">{info.icon}</span>
+                <span className={clsx("text-xs font-bold", info.color)}>{info.label}</span>
+                <span className="text-[10px] bg-white/80 px-1.5 py-0.5 rounded-full font-bold text-slate-500 ml-auto">{count}</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mb-2">{info.desc}</p>
+              {divisions.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {divisions.map(d => (
+                    <span key={d.card.shareCode} className="text-[9px] bg-white/70 px-2 py-0.5 rounded-full text-slate-600 font-medium border border-white/50">
+                      {d.card.businessName}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <div className="px-4 py-3 grid grid-cols-2 gap-2 text-[10px]">
-        <div>
-          <span className="text-slate-400">BM Points</span>
-          <p className="font-bold text-slate-700">{card.businessModel.valueProposition.points.length + card.businessModel.valueArchitecture.points.length + card.businessModel.contributions.points.length}</p>
+
+      {/* ── Division Detail Cards (collapsed) ── */}
+      <details className="group">
+        <summary className="text-sm font-medium text-slate-500 cursor-pointer hover:text-slate-700 transition-colors flex items-center gap-2">
+          <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full">▶</span>
+          View individual division details ({cards.length} divisions)
+        </summary>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {plotData.map((d) => {
+            const q = getQuadrant(d.strengthScore, d.dynamismScore);
+            const colors = { growth: "border-blue-300", core: "border-slate-300", nurture: "border-emerald-300", restructure: "border-amber-300" };
+            return (
+              <div key={d.card.shareCode} className={clsx("bg-white rounded-xl border-2 shadow-sm overflow-hidden", colors[q])}>
+                <div className="px-4 py-2.5" style={{ backgroundColor: d.card.color + "10", borderBottom: `2px solid ${d.card.color}` }}>
+                  <h5 className="text-xs font-bold text-slate-800 truncate">{d.card.businessName}</h5>
+                  <p className="text-[9px] text-slate-500">{d.card.ownerName} · {d.card.ownerRegion}</p>
+                </div>
+                <div className="px-4 py-2.5 grid grid-cols-4 gap-2 text-[9px]">
+                  <div>
+                    <span className="text-slate-400 block">VRIO</span>
+                    <span className="font-bold text-slate-700">{d.vrioMet}/4</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">BM</span>
+                    <span className="font-bold text-slate-700">{d.bmPoints}pts</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">5F</span>
+                    <span className="font-bold text-slate-700">{d.fiveTotal}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">SWOT</span>
+                    <span className="font-bold text-emerald-600">+{d.swotPos}</span>
+                    <span className="font-bold text-red-500 ml-0.5">-{d.swotNeg}</span>
+                  </div>
+                </div>
+                <div className="px-4 py-1.5 bg-slate-50 text-[9px] text-slate-500">
+                  {quadrantInfo[q].icon} {quadrantInfo[q].label}
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <div>
-          <span className="text-slate-400">5F Factors</span>
-          <p className="font-bold text-slate-700">{card.fiveForces.newEntrants.points.length + card.fiveForces.suppliers.points.length + card.fiveForces.rivalry.points.length + card.fiveForces.buyers.points.length + card.fiveForces.substitutes.points.length}</p>
-        </div>
-        <div>
-          <span className="text-slate-400">VRIO</span>
-          <p className="font-bold text-slate-700">{vrioMet}/4</p>
-        </div>
-        <div>
-          <span className="text-slate-400">SWOT</span>
-          <p className="font-bold text-slate-700">{card.swot.strengths.points.length + card.swot.weaknesses.points.length + card.swot.opportunities.points.length + card.swot.threats.points.length}</p>
-        </div>
-      </div>
+      </details>
     </div>
   );
 }
