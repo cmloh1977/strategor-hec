@@ -45,15 +45,33 @@ The JSON must follow this exact structure:
   "healthScore": <0-100>
 }
 
-Scoring guidance:
-- Business Model scores: 1=vague/missing, 2=shallow, 3=adequate, 4=strong, 5=exceptional clarity and specificity
-- Five Forces severity: 1-3=Low (favorable), 4-6=Moderate, 7-8=High, 9-10=Very High (intense pressure)
-- VRIO strength: 1=not demonstrated, 2=weak, 3=present, 4=strong, 5=exceptional
-- SWOT weights: Score based on STRATEGIC SIGNIFICANCE of the points, not just count. A single critical threat can outweigh 3 minor strengths.
-- Health Score: Holistically assess the overall strategic position (0-100)
-- Priorities: Focus on the 3 most impactful actions the business should take
+## Scoring Philosophy — READ THIS CAREFULLY
+You are scoring the QUALITY OF STRATEGIC THINKING, not the quality of writing or how impressive the business sounds.
 
-Be rigorous and honest. Do not inflate scores. A typical mid-level manager's first analysis should score 40-70, not 80+.`;
+A high-scoring analysis:
+- Acknowledges **tensions and contradictions** (e.g., "Our key strength is also our biggest dependency")
+- Identifies **specific, honest weaknesses** rather than vague or softened ones
+- Shows **internal consistency** between modules (5 Forces threats should surface in SWOT threats; VRIO gaps should surface in weaknesses)
+- Distinguishes between **genuinely rare capabilities** and industry table-stakes
+- Names **concrete vulnerabilities** in the business model, not just strengths
+
+A LOW-scoring analysis:
+- Is uniformly positive across all dimensions (real businesses are messy — all-green is a red flag for lack of honesty)
+- Uses corporate buzzwords without specific evidence
+- Claims "Sustained Advantage" with generic resources that competitors clearly also have
+- Lists only minor, harmless weaknesses while ignoring structural ones
+- Has generic threats like "digital disruption" or "geopolitical instability" with no specific mechanism described
+
+## Specific Scoring Guidance
+- Business Model scores: 1=vague/missing, 2=shallow, 3=adequate, 4=strong with vulnerabilities acknowledged, 5=exceptional clarity AND honest about fragility points
+- Five Forces severity: 1-3=Low (favorable), 4-6=Moderate, 7-8=High, 9-10=Very High (intense pressure). Score what the EVIDENCE suggests, not what sounds impressive.
+- VRIO strength: 1=not demonstrated, 2=weak, 3=present, 4=strong with honest caveats, 5=exceptional AND the analysis explains WHY competitors cannot replicate it
+- SWOT weights: Score based on STRATEGIC SIGNIFICANCE of the points, not count. A single critical, specific threat outweighs 3 generic ones. Reward brutally honest weaknesses — they show depth of reflection.
+- Health Score: Holistically assess the overall QUALITY OF STRATEGIC THINKING (0-100). A thoughtful analysis that identifies real vulnerabilities should score HIGHER than a polished one that hides them. 50-65 is a genuinely good, honest analysis. 70+ requires both depth AND honesty. 80+ is exceptional strategic thinking with real tension acknowledged.
+- Priorities: Focus on the 3 most impactful actions. Reward priorities that address honestly-identified weaknesses over vague aspirational goals.
+
+Be rigorous and honest. Do not inflate scores. A typical mid-level manager's first analysis should score 40-65, not 80+.
+CRITICAL: If all four VRIO dimensions score 4-5 AND all SWOT is positive, something is likely wrong — the analysis is probably too rosy. Adjust the health score downward and note this in the narrative.`;
 
 export async function POST(req: Request) {
   try {
