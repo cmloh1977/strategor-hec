@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Shield, Swords, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Sparkles, Loader2, Star, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { Shield, Swords, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Sparkles, Loader2, Star, TrendingUp, TrendingDown, AlertTriangle, FileDown } from "lucide-react";
+import { generateReportPDF } from "@/lib/generateReportPDF";
 import clsx from "clsx";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -27,6 +28,7 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
   const [aiData, setAiData] = useState<AIAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const hasFetched = useRef(false);
 
   const saveToFirestore = async (data: AIAnalysis) => {
@@ -303,7 +305,7 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           </div>
         </div>
 
-        <div className="px-6 py-3 border-t border-slate-100">
+        <div className="px-6 py-3 border-t border-slate-100 flex items-center justify-between">
           <button
             onClick={runAnalysis}
             disabled={analyzing}
@@ -311,6 +313,37 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           >
             {analyzing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
             {analyzing ? "Re-analyzing..." : "Re-analyze"}
+          </button>
+          <button
+            onClick={async () => {
+              if (!aiData) return;
+              setGeneratingReport(true);
+              try {
+                const res = await fetch("/api/generate-report", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ analysis, aiScores: aiData }),
+                });
+                if (!res.ok) throw new Error("Report generation failed");
+                const report = await res.json();
+                generateReportPDF(
+                  report,
+                  aiData,
+                  analysis.businessName,
+                  analysis.ownerName,
+                  analysis.ownerRegion
+                );
+              } catch (err) {
+                console.error("Report generation error:", err);
+                alert("Failed to generate report. Please try again.");
+              }
+              setGeneratingReport(false);
+            }}
+            disabled={generatingReport || !aiData}
+            className="text-xs text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg border border-emerald-200 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+          >
+            {generatingReport ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
+            {generatingReport ? "Generating Report..." : "Download Full Report"}
           </button>
         </div>
       </div>
