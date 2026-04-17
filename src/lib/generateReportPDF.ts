@@ -1,4 +1,4 @@
-import jsPDF from "jspdf";
+// jsPDF is imported dynamically to avoid SSR issues
 
 interface ReportData {
   reportTitle: string;
@@ -81,13 +81,14 @@ function getGrade(score: number): string {
   return "F";
 }
 
-export function generateReportPDF(
+export async function generateReportPDF(
   report: ReportData,
   aiScores: AIScores,
   businessName: string,
   ownerName: string,
   ownerRegion: string
 ) {
+  const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
   const pageHeight = 297;
