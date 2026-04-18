@@ -349,13 +349,12 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
     enabled: !allRevealed && !!myPlacement && !myPlacement.locked,
   });
 
-  // Save placement when drag ends or justification changes
+  // Save placement AND lock in one atomic write (prevents race condition)
   const handleLock = async () => {
     const pos = localDragPos || dragPos;
     if (!pos || !justification.trim()) return;
     const aiPos = computeAIPosition(cards.find((c) => c.shareCode === myShareCode) || cards[0]);
-    await savePlacement(myShareCode, pos, justification, aiPos);
-    await lockPlacement(myShareCode);
+    await savePlacement(myShareCode, pos, justification, aiPos, true); // true = lock
   };
 
   // Submit a challenge

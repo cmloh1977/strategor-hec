@@ -109,7 +109,7 @@ interface TeamContextType {
   addChatMessage: (message: ChatMessage) => Promise<void>;
 
   // V8: Placement actions
-  savePlacement: (shareCode: string, position: { x: number; y: number }, justification: string, aiPosition: { x: number; y: number }) => Promise<void>;
+  savePlacement: (shareCode: string, position: { x: number; y: number }, justification: string, aiPosition: { x: number; y: number }, lock?: boolean) => Promise<void>;
   lockPlacement: (shareCode: string) => Promise<void>;
   revealAll: () => Promise<void>;
   addChallenge: (targetShareCode: string, entry: ChallengeEntry) => Promise<void>;
@@ -376,14 +376,15 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     shareCode: string,
     position: { x: number; y: number },
     justification: string,
-    aiPosition: { x: number; y: number }
+    aiPosition: { x: number; y: number },
+    lock: boolean = false
   ) => {
     if (!teamCode || !team?.placementState) return;
     const updated = {
       ...team.placementState,
       placements: team.placementState.placements.map((p) =>
         p.shareCode === shareCode
-          ? { ...p, selfPosition: position, justification, aiPosition }
+          ? { ...p, selfPosition: position, justification, aiPosition, ...(lock ? { locked: true } : {}) }
           : p
       ),
     };
