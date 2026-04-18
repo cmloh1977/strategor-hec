@@ -789,12 +789,12 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 📍 {getQuadrantLabel(activeDragPos.x, activeDragPos.y)} quadrant
               </div>
             )}
-            {/* Business Scale slider */}
+            {/* Growth Potential slider */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-600">📏 Business Scale</label>
+                <label className="text-[11px] font-semibold text-slate-600">📏 Growth Potential</label>
                 <span className="text-[10px] text-slate-400 font-medium">
-                  {localBubbleSize <= 3 ? "Small" : localBubbleSize <= 6 ? "Medium" : localBubbleSize <= 8 ? "Large" : "Dominant"}
+                  {localBubbleSize <= 2 ? "Niche" : localBubbleSize <= 4 ? "Emerging" : localBubbleSize <= 6 ? "Established" : localBubbleSize <= 8 ? "Major" : "Dominant"}
                 </span>
               </div>
               <input
@@ -807,8 +807,8 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <div className="flex justify-between text-[8px] text-slate-300 px-0.5">
-                <span>Small</span>
-                <span>Large</span>
+                <span>Niche</span>
+                <span>Dominant</span>
               </div>
             </div>
             <textarea
