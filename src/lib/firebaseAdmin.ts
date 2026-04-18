@@ -15,4 +15,4 @@ if (getApps().length === 0) {
 }
 
 export const adminAuth = getAuth(adminApp);
-export const adminDb = getFirestore(adminApp);
+export const adminDb = getFirestore(adminApp, "strategor-galp");
