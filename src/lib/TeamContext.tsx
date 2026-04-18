@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
-import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, getDoc, updateDoc, arrayUnion, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import type { HealthCard } from "./PortfolioContext";
@@ -116,6 +116,7 @@ interface TeamContextType {
   adjustPosition: (shareCode: string, newPosition: { x: number; y: number }) => Promise<void>;
   savePortfolioSynthesis: (synthesis: string) => Promise<void>;
   initPlacements: (cards: HealthCard[], computeAIPosition: (card: HealthCard) => { x: number; y: number }) => Promise<void>;
+  resetPlacements: () => Promise<void>;
 
   // Derived
   isLeader: boolean;
@@ -476,6 +477,18 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
   }, [teamCode, team]);
 
+  const resetPlacements = useCallback(async () => {
+    if (!teamCode) return;
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        placementState: deleteField(),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Reset placements error:", e);
+    }
+  }, [teamCode]);
+
   // ── Derived ──
   const isLeader = !!user && !!team && team.leaderUID === user.uid;
   const isInTeam = !!team && !!user && team.memberUIDs.includes(user.uid);
@@ -500,6 +513,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         adjustPosition,
         savePortfolioSynthesis,
         initPlacements,
+        resetPlacements,
         isLeader,
         isInTeam,
       }}

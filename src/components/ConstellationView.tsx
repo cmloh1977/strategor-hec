@@ -291,7 +291,7 @@ function getQuadrantLabel(x: number, y: number): string {
 
 function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
   const { user } = useAuth();
-  const { team, initPlacements, savePlacement, lockPlacement, revealAll, addChallenge, adjustPosition, savePortfolioSynthesis, isLeader } = useTeam();
+  const { team, initPlacements, savePlacement, lockPlacement, revealAll, addChallenge, adjustPosition, savePortfolioSynthesis, resetPlacements, isLeader } = useTeam();
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [challengeText, setChallengeText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -464,16 +464,26 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             }
           </p>
         </div>
-        {!allRevealed && allLocked && (
-          <button onClick={revealAll} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
-            ✨ Reveal All Positions
-          </button>
-        )}
-        {allRevealed && !selectedMember && !ps?.portfolioSynthesis && (
-          <button onClick={triggerPortfolioSynthesis} disabled={portfolioLoading} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50">
-            {portfolioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "🔮 Portfolio Synthesis"}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!allRevealed && allLocked && (
+            <button onClick={revealAll} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
+              ✨ Reveal All Positions
+            </button>
+          )}
+          {allRevealed && !selectedMember && !ps?.portfolioSynthesis && (
+            <button onClick={triggerPortfolioSynthesis} disabled={portfolioLoading} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50">
+              {portfolioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "🔮 Portfolio Synthesis"}
+            </button>
+          )}
+          {isLeader && placements.length > 0 && (
+            <button
+              onClick={() => { if (confirm("Reset all placements? Everyone will need to re-place.")) { resetPlacements(); setLocalDragPos(null); setJustification(""); } }}
+              className="px-3 py-2 text-xs text-red-500 border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
+            >
+              🔄 Reset
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-4">
@@ -551,9 +561,8 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 // During blind phase: only show self
                 if (!allRevealed && !isMe) return null;
 
-                // Show bubble at center only if user hasn't placed yet (so they can grab it)
-                const displayPos = pos || (isMe && !p.locked ? { x: 50, y: 50 } : null);
-                if (!displayPos) return null;
+                // Show bubble: always fall back to center if position data is missing
+                const displayPos = pos || { x: 50, y: 50 };
 
                 const quadrant = getQuadrantLabel(displayPos.x, displayPos.y);
                 const bubbleColor = quadrant === "Growth" ? "bg-blue-500" : quadrant === "Core" ? "bg-slate-500" : quadrant === "Nurturing" ? "bg-emerald-500" : "bg-amber-500";
