@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
+import { adminAuth } from "@/lib/firebaseAdmin";
 
 const MASTER_EMAIL = "chee_ming_loh@toyota-tsusho.com";
 
@@ -13,7 +13,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const adminAuth = await getAdminAuth();
     if (action === "create") {
       if (!email || !password) {
         return NextResponse.json({ error: "Email and password are required" }, { status: 400 });

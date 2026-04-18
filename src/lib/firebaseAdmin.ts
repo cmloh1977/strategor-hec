@@ -1,32 +1,16 @@
-// Use dynamic imports to prevent Turbopack from mangling firebase-admin package names
-let _adminAuth: any = null;
-let _adminDb: any = null;
-let _initialized = false;
+import { initializeApp, getApps, App } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 
-async function initAdmin() {
-  if (_initialized) return;
-  const { initializeApp, getApps } = await import("firebase-admin/app");
-  const { getAuth } = await import("firebase-admin/auth");
-  const { getFirestore } = await import("firebase-admin/firestore");
+let adminApp: App;
 
-  let app;
-  if (getApps().length === 0) {
-    app = initializeApp({ projectId: "ttc-dna" });
-  } else {
-    app = getApps()[0];
-  }
-
-  _adminAuth = getAuth(app);
-  _adminDb = getFirestore(app, "strategor-galp");
-  _initialized = true;
+if (getApps().length === 0) {
+  adminApp = initializeApp({
+    projectId: "ttc-dna",
+  });
+} else {
+  adminApp = getApps()[0];
 }
 
-export async function getAdminAuth() {
-  await initAdmin();
-  return _adminAuth;
-}
-
-export async function getAdminDb() {
-  await initAdmin();
-  return _adminDb;
-}
+export const adminAuth = getAuth(adminApp);
+export const adminDb = getFirestore(adminApp, "strategor-galp");

@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebaseAdmin';
+import { adminDb } from '@/lib/firebaseAdmin';
 
 const ai = new GoogleGenAI({});
 
@@ -171,7 +171,6 @@ ${summarize(card.swot?.threats?.points || [])}
 async function fetchChatHistory(uid: string): Promise<Record<string, any>> {
   const chatHistory: Record<string, any> = {};
   const modules = ['business-model', 'external-analysis', 'internal-analysis', 'swot-synthesis'];
-  const adminDb = await getAdminDb();
   
   for (const mod of modules) {
     try {
