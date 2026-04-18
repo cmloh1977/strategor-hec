@@ -723,15 +723,32 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                   <Send className="h-4 w-4" />
                 </button>
               </div>
-              {/* AI Challenge button */}
-              <button
-                onClick={triggerAIChallenge}
-                disabled={aiLoading}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl text-sm font-semibold hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 transition-all shadow-sm"
-              >
-                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-                {aiLoading ? "AI is analyzing..." : "🤖 AI Challenge Me"}
-              </button>
+              {/* AI Challenge button — unlocked after 10+ human challenges */}
+              {(() => {
+                const humanCount = selectedPlacement.challenges.filter((c) => c.type === "human-challenge").length;
+                const MIN_CHALLENGES = 10;
+                const unlocked = humanCount >= MIN_CHALLENGES;
+                return (
+                  <button
+                    onClick={triggerAIChallenge}
+                    disabled={aiLoading || !unlocked}
+                    className={clsx(
+                      "w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm",
+                      unlocked
+                        ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50"
+                        : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                    )}
+                  >
+                    {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                    {aiLoading
+                      ? "AI is analyzing..."
+                      : unlocked
+                      ? "🤖 AI Challenge Me"
+                      : `🔒 ${MIN_CHALLENGES - humanCount} more challenges to unlock AI`
+                    }
+                  </button>
+                );
+              })()}
               {/* Adjust position button (for the owner of this analysis) */}
               {selectedPlacement.ownerUID === user?.uid && selectedPlacement.aiChallengeGenerated && (
                 <button
