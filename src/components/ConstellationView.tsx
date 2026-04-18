@@ -316,6 +316,16 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
     }
   }, [cards, team]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Restore localDragPos from Firestore (e.g. after leaving and re-entering Level 1)
+  useEffect(() => {
+    if (myPlacement?.selfPosition && !localDragPos) {
+      setLocalDragPos(myPlacement.selfPosition);
+    }
+    if (myPlacement?.justification && !justification) {
+      setJustification(myPlacement.justification);
+    }
+  }, [myPlacement?.selfPosition, myPlacement?.justification]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Scroll challenge panel to bottom
   useEffect(() => {
     challengeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -489,7 +499,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             </div>
 
             {/* Grid area */}
-            <div ref={gridRef} className="absolute left-8 top-0 right-0 bottom-6 border-l-2 border-b-2 border-slate-200" {...(!myPlacement?.locked && !allRevealed ? dragHandlers : {})}>
+            <div ref={gridRef} className="absolute left-8 top-0 right-0 bottom-6 border-l-2 border-b-2 border-slate-200">
               {/* Quadrant backgrounds */}
               <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
                 <div className="bg-amber-50/60 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
@@ -518,17 +528,21 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               {placements.map((p) => {
                 const isMe = p.ownerUID === user?.uid;
                 const isMeDragging = isMe && isDragging;
-                const pos = isMe && currentDragPos
+                const pos = isMeDragging && dragPos
+                  ? dragPos
+                  : isMe && currentDragPos
                   ? currentDragPos
                   : (p.adjustedPosition || p.selfPosition);
                 const isSelected = p.shareCode === selectedMember;
+                const canDrag = isMe && !p.locked && !allRevealed;
 
                 // During blind phase: only show self
                 if (!allRevealed && !isMe) return null;
-                // If no position yet (hasn't placed), don't render
-                if (!pos && !isMeDragging) return null;
 
-                const displayPos = pos || { x: 50, y: 50 };
+                // Show bubble at center if user hasn't placed yet (so they can grab it)
+                const displayPos = pos || (isMe ? { x: 50, y: 50 } : null);
+                if (!displayPos) return null;
+
                 const quadrant = getQuadrantLabel(displayPos.x, displayPos.y);
                 const bubbleColor = quadrant === "Growth" ? "bg-blue-500" : quadrant === "Core" ? "bg-slate-500" : quadrant === "Nurturing" ? "bg-emerald-500" : "bg-amber-500";
                 const ringColor = isSelected ? "ring-indigo-400" : quadrant === "Growth" ? "ring-blue-200" : quadrant === "Core" ? "ring-slate-200" : quadrant === "Nurturing" ? "ring-emerald-200" : "ring-amber-200";
@@ -537,10 +551,11 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                   <div
                     key={p.shareCode}
                     className={clsx(
-                      "absolute transition-all duration-200 ease-out z-10",
-                      isMe && !p.locked && !allRevealed ? "cursor-grab active:cursor-grabbing" : allRevealed ? "cursor-pointer" : "",
+                      "absolute z-10",
+                      canDrag ? "cursor-grab active:cursor-grabbing" : allRevealed ? "cursor-pointer" : "",
                       isMeDragging && "z-50",
-                      !allRevealed && isMe && !p.locked && "animate-pulse"
+                      !isMeDragging && "transition-all duration-200 ease-out",
+                      !allRevealed && isMe && !p.locked && !pos && "animate-pulse"
                     )}
                     style={{
                       left: `${displayPos.x}%`,
@@ -548,7 +563,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                       transform: `translate(-50%, -50%) scale(${isSelected ? 1.15 : isMeDragging ? 1.2 : 1})`,
                     }}
                     onClick={() => allRevealed && setSelectedMember(p.shareCode === selectedMember ? null : p.shareCode)}
-                    {...(isMe && !p.locked && !allRevealed ? dragHandlers : {})}
+                    {...(canDrag ? dragHandlers : {})}
                   >
                     <div
                       className={clsx(
