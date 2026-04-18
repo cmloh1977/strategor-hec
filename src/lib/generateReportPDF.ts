@@ -67,6 +67,38 @@ interface AIScores {
   };
 }
 
+interface PillarDataPDF {
+  points: string[];
+  populated: boolean;
+}
+
+export interface FrameworkData {
+  businessModel: {
+    valueProposition: PillarDataPDF;
+    valueArchitecture: PillarDataPDF;
+    contributions: PillarDataPDF;
+  };
+  fiveForces: {
+    newEntrants: PillarDataPDF;
+    suppliers: PillarDataPDF;
+    rivalry: PillarDataPDF;
+    buyers: PillarDataPDF;
+    substitutes: PillarDataPDF;
+  };
+  vrio: {
+    valuable: PillarDataPDF;
+    rare: PillarDataPDF;
+    inimitable: PillarDataPDF;
+    organized: PillarDataPDF;
+  };
+  swot: {
+    strengths: PillarDataPDF;
+    weaknesses: PillarDataPDF;
+    opportunities: PillarDataPDF;
+    threats: PillarDataPDF;
+  };
+}
+
 // ── Color palette ──
 const C = {
   darkSlate: [30, 41, 59] as [number, number, number],
@@ -122,7 +154,8 @@ export async function generateReportPDF(
   aiScores: AIScores,
   businessName: string,
   ownerName: string,
-  ownerRegion: string
+  ownerRegion: string,
+  frameworkData?: FrameworkData
 ) {
   const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -783,6 +816,178 @@ export async function generateReportPDF(
   y += wrap(report.teamImplications, M + 2, CW - 4, 8, C.slate700, 1.6);
 
   footer();
+
+  // ════════════════════════════════════════
+  // APPENDIX: Framework Diagrams
+  // ════════════════════════════════════════
+  if (frameworkData) {
+    // Helper: draw a colored panel with title, icon text, and bullet points
+    function drawPanel(
+      px: number, py: number, pw: number, ph: number,
+      bg: [number, number, number], title: string, subtitle: string,
+      points: string[], populated: boolean
+    ): number {
+      // Panel background with rounded corners
+      doc.setFillColor(...bg);
+      doc.roundedRect(px, py, pw, ph, 3, 3, "F");
+
+      // Title
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255);
+      doc.text(title, px + 5, py + 7);
+
+      // Subtitle
+      doc.setFontSize(6.5);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(255, 255, 255, 0.6);
+      doc.text(subtitle, px + 5, py + 12);
+
+      // Points
+      let bulletY = py + 18;
+      const items = populated ? points : [`(Not yet completed)`];
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(255, 255, 255);
+      for (const item of items.slice(0, 8)) {
+        if (bulletY > py + ph - 4) break;
+        // Bullet dot
+        doc.setFillColor(255, 255, 255);
+        doc.circle(px + 6, bulletY - 0.8, 0.6, "F");
+        // Text (wrap within panel)
+        const lines = doc.splitTextToSize(item, pw - 14);
+        for (const line of lines.slice(0, 2)) {
+          if (bulletY > py + ph - 4) break;
+          doc.text(line, px + 9, bulletY);
+          bulletY += 3.2;
+        }
+        bulletY += 0.5;
+      }
+      return bulletY;
+    }
+
+    // ── Appendix A: Business Model (Odyssey 3.14) ──
+    doc.addPage();
+    y = M;
+    footer();
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.darkSlate);
+    doc.text("Appendix A: Business Model", M, y + 5);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...C.slate400);
+    doc.text("Odyssey 3.14 — Lehmann-Ortega, Musikas, Schoettl", M, y + 11);
+    y += 18;
+
+    const bmPanelH = 75;
+    const bmGap = 4;
+    const bmHalfW = (CW - bmGap) / 2;
+    // Value Proposition (left)
+    drawPanel(M, y, bmHalfW, bmPanelH, [232, 99, 74], "Value Proposition", "Who? What?",
+      frameworkData.businessModel.valueProposition.points, frameworkData.businessModel.valueProposition.populated);
+    // Value Architecture (right)
+    drawPanel(M + bmHalfW + bmGap, y, bmHalfW, bmPanelH, [30, 181, 196], "Value Architecture", "How?",
+      frameworkData.businessModel.valueArchitecture.points, frameworkData.businessModel.valueArchitecture.populated);
+    y += bmPanelH + bmGap;
+    // Contributions (center)
+    const contW = bmHalfW;
+    drawPanel(M + (CW - contW) / 2, y, contW, bmPanelH, [137, 182, 48], "Contributions", "How much?",
+      frameworkData.businessModel.contributions.points, frameworkData.businessModel.contributions.populated);
+
+    // ── Appendix B: Five Forces (Porter) ──
+    doc.addPage();
+    y = M;
+    footer();
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.darkSlate);
+    doc.text("Appendix B: External Analysis — Five Forces", M, y + 5);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...C.slate400);
+    doc.text("Porter's Five Forces — Michael E. Porter", M, y + 11);
+    y += 18;
+
+    const ffPanelW = (CW - bmGap * 2) / 3;
+    const ffPanelH = 65;
+    const ffSlate: [number, number, number] = [100, 116, 139];
+    const ffIndigo: [number, number, number] = [79, 70, 229];
+
+    // Row 1: New Entrants (center)
+    drawPanel(M + ffPanelW + bmGap, y, ffPanelW, ffPanelH, ffSlate, "New Entrants", "Threat",
+      frameworkData.fiveForces.newEntrants.points, frameworkData.fiveForces.newEntrants.populated);
+    y += ffPanelH + bmGap;
+
+    // Row 2: Suppliers (left), Rivalry (center), Buyers (right)
+    drawPanel(M, y, ffPanelW, ffPanelH, ffSlate, "Suppliers", "Bargaining Power",
+      frameworkData.fiveForces.suppliers.points, frameworkData.fiveForces.suppliers.populated);
+    drawPanel(M + ffPanelW + bmGap, y, ffPanelW, ffPanelH, ffIndigo, "Industry Rivalry", "Competition Intensity",
+      frameworkData.fiveForces.rivalry.points, frameworkData.fiveForces.rivalry.populated);
+    drawPanel(M + (ffPanelW + bmGap) * 2, y, ffPanelW, ffPanelH, ffSlate, "Buyers", "Bargaining Power",
+      frameworkData.fiveForces.buyers.points, frameworkData.fiveForces.buyers.populated);
+    y += ffPanelH + bmGap;
+
+    // Row 3: Substitutes (center)
+    drawPanel(M + ffPanelW + bmGap, y, ffPanelW, ffPanelH, ffSlate, "Substitutes", "Threat",
+      frameworkData.fiveForces.substitutes.points, frameworkData.fiveForces.substitutes.populated);
+
+    // ── Appendix C: VRIO Analysis ──
+    doc.addPage();
+    y = M;
+    footer();
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.darkSlate);
+    doc.text("Appendix C: Internal Analysis — VRIO", M, y + 5);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...C.slate400);
+    doc.text("VRIO Framework — Jay B. Barney", M, y + 11);
+    y += 18;
+
+    const vrioW = (CW - bmGap) / 2;
+    const vrioH = 90;
+    // Row 1: Valuable + Rare
+    drawPanel(M, y, vrioW, vrioH, [16, 185, 129], "Valuable", "Does it provide value?",
+      frameworkData.vrio.valuable.points, frameworkData.vrio.valuable.populated);
+    drawPanel(M + vrioW + bmGap, y, vrioW, vrioH, [245, 158, 11], "Rare", "Do few others have it?",
+      frameworkData.vrio.rare.points, frameworkData.vrio.rare.populated);
+    y += vrioH + bmGap;
+    // Row 2: Inimitable + Organized
+    drawPanel(M, y, vrioW, vrioH, [239, 68, 68], "Inimitable", "Is it costly to copy?",
+      frameworkData.vrio.inimitable.points, frameworkData.vrio.inimitable.populated);
+    drawPanel(M + vrioW + bmGap, y, vrioW, vrioH, [99, 102, 241], "Organized", "Is the firm organized to exploit it?",
+      frameworkData.vrio.organized.points, frameworkData.vrio.organized.populated);
+
+    // ── Appendix D: SWOT Synthesis ──
+    doc.addPage();
+    y = M;
+    footer();
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.darkSlate);
+    doc.text("Appendix D: SWOT Synthesis", M, y + 5);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...C.slate400);
+    doc.text("SWOT Analysis — Albert Humphrey", M, y + 11);
+    y += 18;
+
+    const swotW = (CW - bmGap) / 2;
+    const swotH = 90;
+    // Row 1: Strengths + Weaknesses
+    drawPanel(M, y, swotW, swotH, [13, 148, 136], "Strengths", "Internal Positive",
+      frameworkData.swot.strengths.points, frameworkData.swot.strengths.populated);
+    drawPanel(M + swotW + bmGap, y, swotW, swotH, [190, 18, 60], "Weaknesses", "Internal Negative",
+      frameworkData.swot.weaknesses.points, frameworkData.swot.weaknesses.populated);
+    y += swotH + bmGap;
+    // Row 2: Opportunities + Threats
+    drawPanel(M, y, swotW, swotH, [2, 132, 199], "Opportunities", "External Positive",
+      frameworkData.swot.opportunities.points, frameworkData.swot.opportunities.populated);
+    drawPanel(M + swotW + bmGap, y, swotW, swotH, [180, 83, 9], "Threats", "External Negative",
+      frameworkData.swot.threats.points, frameworkData.swot.threats.populated);
+  }
 
   // ── Save ──
   doc.save(`${businessName.replace(/\s+/g, "_")}_Strategic_Report.pdf`);

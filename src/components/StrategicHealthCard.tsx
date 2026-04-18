@@ -331,7 +331,13 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
                   aiData,
                   analysis.businessName,
                   analysis.ownerName,
-                  analysis.ownerRegion
+                  analysis.ownerRegion,
+                  {
+                    businessModel: analysis.businessModel,
+                    fiveForces: analysis.fiveForces,
+                    vrio: analysis.vrio,
+                    swot: analysis.swot,
+                  }
                 );
               } catch (err) {
                 console.error("Report generation error:", err);
