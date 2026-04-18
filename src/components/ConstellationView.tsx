@@ -444,8 +444,8 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
     setPortfolioLoading(false);
   };
 
-  // ── Render ──
-  const currentDragPos = isDragging && dragPos ? dragPos : localDragPos;
+  // Active position for the side panel (shows where user is dragging or has last placed)
+  const activeDragPos = isDragging && dragPos ? dragPos : (localDragPos || myPlacement?.selfPosition || null);
 
   return (
     <div className="space-y-4">
@@ -528,19 +528,31 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               {placements.map((p) => {
                 const isMe = p.ownerUID === user?.uid;
                 const isMeDragging = isMe && isDragging;
-                const pos = isMeDragging && dragPos
-                  ? dragPos
-                  : isMe && currentDragPos
-                  ? currentDragPos
-                  : (p.adjustedPosition || p.selfPosition);
-                const isSelected = p.shareCode === selectedMember;
                 const canDrag = isMe && !p.locked && !allRevealed;
+
+                // Position priority:
+                // 1. Live drag position (while actively dragging)
+                // 2. Firestore position (adjusted > self — always the source of truth when locked)
+                // 3. Local drag position (only used during pre-lock placement phase)
+                // 4. Center fallback (only if not locked yet, so user can grab the bubble)
+                let pos: { x: number; y: number } | null;
+                if (isMeDragging && dragPos) {
+                  pos = dragPos;  // live drag
+                } else if (p.adjustedPosition || p.selfPosition) {
+                  pos = p.adjustedPosition || p.selfPosition;  // Firestore = source of truth
+                } else if (isMe && localDragPos) {
+                  pos = localDragPos;  // pre-lock local state
+                } else {
+                  pos = null;
+                }
+
+                const isSelected = p.shareCode === selectedMember;
 
                 // During blind phase: only show self
                 if (!allRevealed && !isMe) return null;
 
-                // Show bubble at center if user hasn't placed yet (so they can grab it)
-                const displayPos = pos || (isMe ? { x: 50, y: 50 } : null);
+                // Show bubble at center only if user hasn't placed yet (so they can grab it)
+                const displayPos = pos || (isMe && !p.locked ? { x: 50, y: 50 } : null);
                 if (!displayPos) return null;
 
                 const quadrant = getQuadrantLabel(displayPos.x, displayPos.y);
@@ -739,9 +751,9 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             <p className="text-[11px] text-slate-500 leading-relaxed">
               Drag your icon on the grid. Think about where your business honestly sits in terms of <strong>competitive strength</strong> and <strong>market dynamism</strong>.
             </p>
-            {currentDragPos && (
+            {activeDragPos && (
               <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2">
-                📍 {getQuadrantLabel(currentDragPos.x, currentDragPos.y)} quadrant
+                📍 {getQuadrantLabel(activeDragPos.x, activeDragPos.y)} quadrant
               </div>
             )}
             <textarea
@@ -753,7 +765,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             />
             <button
               onClick={handleLock}
-              disabled={!currentDragPos || !justification.trim() || myPlacement?.locked}
+              disabled={!activeDragPos || !justification.trim() || myPlacement?.locked}
               className={clsx(
                 "w-full py-2.5 rounded-xl text-sm font-semibold transition-colors",
                 myPlacement?.locked
