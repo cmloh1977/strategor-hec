@@ -254,24 +254,35 @@ ${summarize(analysis.swot?.threats?.points || [])}
 ═══ AI HEALTH CARD SCORES ═══
 ${JSON.stringify(aiScores, null, 2)}
 `;
+    // Attempt up to 2 tries — use responseMimeType to force valid JSON
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: [{ role: 'user', parts: [{ text: analysisText }] }],
+          config: {
+            systemInstruction: REPORT_PROMPT,
+            temperature: 0.4,
+            maxOutputTokens: 4096,
+            responseMimeType: 'application/json',
+          },
+        });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [{ role: 'user', parts: [{ text: analysisText }] }],
-      config: {
-        systemInstruction: REPORT_PROMPT,
-        temperature: 0.4,
-        maxOutputTokens: 4096,
-      },
-    });
+        const text = response.text || "";
+        const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const report = JSON.parse(cleaned);
+        return NextResponse.json(report);
+      } catch (parseErr: any) {
+        console.error(`Report generation attempt ${attempt + 1} failed:`, parseErr.message);
+        lastError = parseErr;
+      }
+    }
 
-    const text = response.text || "";
-    
-    // Parse JSON — strip markdown fences if present
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const report = JSON.parse(cleaned);
-
-    return NextResponse.json(report);
+    return NextResponse.json(
+      { error: lastError?.message || "Failed to generate report after retries" },
+      { status: 500 }
+    );
   } catch (error: any) {
     console.error("Report generation error:", error);
     return NextResponse.json(
