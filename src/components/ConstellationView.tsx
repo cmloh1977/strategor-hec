@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { type HealthCard } from "@/lib/PortfolioContext";
-import { useTeam, type PatternData, type DimensionData, type ChatMessage } from "@/lib/TeamContext";
+import { useTeam, type PatternData, type DimensionData, type ChatMessage, type ChallengeEntry, type MemberPlacement } from "@/lib/TeamContext";
+import { useAuth } from "@/lib/AuthContext";
+import { useDragOnGrid } from "@/lib/useDragOnGrid";
 import {
   Users, BarChart3, Sparkles, Map, Target, Swords, Shield, Zap,
   Loader2, Send, ArrowLeft, ChevronRight, FileDown, Star,
-  TrendingUp, AlertTriangle, Lightbulb, Link2
+  TrendingUp, AlertTriangle, Lightbulb, Link2, MessageCircle, Bot, Move
 } from "lucide-react";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
@@ -167,7 +169,7 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
       <div className="flex flex-1 overflow-hidden">
         {/* Main Panel */}
         <div className="flex-1 overflow-y-auto p-6">
-          {activeLevel === 1 && <Level1Grid cards={cards} />}
+          {activeLevel === 1 && <CollaborativeGrid cards={cards} />}
           {activeLevel === 2 && (loadingPatterns ? <LoadingSkeleton label="Analyzing cross-divisional patterns..." /> : patterns ? <Level2Patterns data={patterns} cards={cards} /> : null)}
           {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to TTC's 4 Higher Dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
         </div>
@@ -249,321 +251,548 @@ function LoadingSkeleton({ label }: { label: string }) {
   );
 }
 
-function Level1Grid({ cards }: { cards: HealthCard[] }) {
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+// ═══════════════════════════════════════
+// AI Position Computation (reused from old Level1Grid)
+// ═══════════════════════════════════════
 
-  // ── Calculate scores for each card ──
-  const plotData = cards.map((card) => {
-    const ai = card.aiAnalysis;
+function computeAIPosition(card: HealthCard): { x: number; y: number } {
+  const ai = card.aiAnalysis;
+  let strengthScore: number, dynamismScore: number;
 
-    // Fallbacks if AI analysis is missing
+  if (ai) {
+    const vrioTotal = ai.vrio.valuable.strength + ai.vrio.rare.strength + ai.vrio.inimitable.strength + ai.vrio.organized.strength;
+    const bmTotal = ai.businessModel.valueProposition.score + ai.businessModel.valueArchitecture.score + ai.businessModel.contributions.score;
+    const vrioNorm = (vrioTotal / 20) * 100;
+    const bmNorm = (bmTotal / 15) * 100;
+    strengthScore = (vrioNorm * 0.6) + (bmNorm * 0.4);
+    const forcesTotal = ai.fiveForces.newEntrants.severity + ai.fiveForces.suppliers.severity + ai.fiveForces.rivalry.severity + ai.fiveForces.buyers.severity + ai.fiveForces.substitutes.severity;
+    dynamismScore = (forcesTotal / 50) * 100;
+  } else {
     const vrioMet = [card.vrio.valuable.populated, card.vrio.rare.populated, card.vrio.inimitable.populated, card.vrio.organized.populated].filter(Boolean).length;
     const bmPoints = card.businessModel.valueProposition.points.length + card.businessModel.valueArchitecture.points.length + card.businessModel.contributions.points.length;
     const fiveTotal = card.fiveForces.newEntrants.points.length + card.fiveForces.suppliers.points.length + card.fiveForces.rivalry.points.length + card.fiveForces.buyers.points.length + card.fiveForces.substitutes.points.length;
-    
-    // SWOT counts
-    const swotPos = card.swot.strengths.points.length + card.swot.opportunities.points.length;
-    const swotNeg = card.swot.weaknesses.points.length + card.swot.threats.points.length;
-    const swotTotal = swotPos + swotNeg;
+    strengthScore = (vrioMet / 4) * 60 + Math.min(bmPoints / 10, 1) * 40;
+    dynamismScore = Math.min(fiveTotal / 25, 1) * 100;
+  }
 
-    let strengthScore, dynamismScore, bubbleSize;
+  return { x: Math.max(5, Math.min(95, strengthScore)), y: Math.max(5, Math.min(95, dynamismScore)) };
+}
 
-    if (ai) {
-      // 1. Competitive Strength (X-axis)
-      // VRIO max is 20 (4 dimensions * 5 max). BM max is 15 (3 sections * 5 max).
-      const vrioTotal = ai.vrio.valuable.strength + ai.vrio.rare.strength + ai.vrio.inimitable.strength + ai.vrio.organized.strength;
-      const bmTotal = ai.businessModel.valueProposition.score + ai.businessModel.valueArchitecture.score + ai.businessModel.contributions.score;
-      
-      const vrioNorm = (vrioTotal / 20) * 100; // 0-100
-      const bmNorm = (bmTotal / 15) * 100; // 0-100
-      
-      strengthScore = (vrioNorm * 0.6) + (bmNorm * 0.4);
+function getQuadrantLabel(x: number, y: number): string {
+  if (x >= 50 && y >= 50) return "Growth";
+  if (x >= 50 && y < 50) return "Core";
+  if (x < 50 && y >= 50) return "Restructuring";
+  return "Nurturing";
+}
 
-      // 2. Market Dynamism (Y-axis - 5 Forces Threat Level)
-      // Max threat is 50 (5 forces * 10 max severity).
-      const forcesTotal = ai.fiveForces.newEntrants.severity + ai.fiveForces.suppliers.severity + ai.fiveForces.rivalry.severity + ai.fiveForces.buyers.severity + ai.fiveForces.substitutes.severity;
-      dynamismScore = (forcesTotal / 50) * 100;
+// ═══════════════════════════════════════
+// LEVEL 1: Collaborative Grid (V8)
+// ═══════════════════════════════════════
 
-      // 3. Bubble Size (SWOT magnitude)
-      // Max weight is 40.
-      const aiSwotTotal = ai.swot.strengthsWeight + ai.swot.weaknessesWeight + ai.swot.opportunitiesWeight + ai.swot.threatsWeight;
-      bubbleSize = Math.max(36, Math.min(64, 28 + (aiSwotTotal / 40) * 36));
-    } else {
-      // Fallback to legacy counting method if AI data is missing
-      strengthScore = (vrioMet / 4) * 60 + Math.min(bmPoints / 10, 1) * 40;
-      dynamismScore = Math.min(fiveTotal / 25, 1) * 100;
-      bubbleSize = Math.max(36, Math.min(64, 28 + swotTotal * 3));
+function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
+  const { user } = useAuth();
+  const { team, initPlacements, savePlacement, lockPlacement, revealAll, addChallenge, adjustPosition, savePortfolioSynthesis, isLeader } = useTeam();
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  const [challengeText, setChallengeText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [justification, setJustification] = useState("");
+  const [localDragPos, setLocalDragPos] = useState<{ x: number; y: number } | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const challengeEndRef = useRef<HTMLDivElement>(null);
+
+  const ps = team?.placementState;
+  const placements = ps?.placements || [];
+  const allRevealed = ps?.allRevealed || false;
+
+  // Find current user's placement
+  const myPlacement = placements.find((p) => p.ownerUID === user?.uid);
+  const myShareCode = myPlacement?.shareCode || "";
+
+  // Initialize placements on first load
+  useEffect(() => {
+    if (cards.length >= 2 && team && !ps?.placements?.length) {
+      initPlacements(cards, computeAIPosition);
     }
+  }, [cards, team]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return { card, strengthScore, dynamismScore, bubbleSize, vrioMet, bmPoints, fiveTotal, swotTotal, swotPos, swotNeg, ai };
+  // Scroll challenge panel to bottom
+  useEffect(() => {
+    challengeEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [selectedMember, placements]);
+
+  // Number locked
+  const lockedCount = placements.filter((p) => p.locked).length;
+  const allLocked = lockedCount === placements.length && placements.length > 0;
+
+  // Selected member's placement
+  const selectedPlacement = placements.find((p) => p.shareCode === selectedMember);
+
+  // Drag handler for self-placement
+  const handleDrop = useCallback((pos: { x: number; y: number }) => {
+    if (!myShareCode || allRevealed) return;
+    setLocalDragPos(pos);
+  }, [myShareCode, allRevealed]);
+
+  const { isDragging, dragPos, handlers: dragHandlers } = useDragOnGrid(gridRef, {
+    onDrop: handleDrop,
+    enabled: !allRevealed && !!myPlacement && !myPlacement.locked,
   });
 
-  // Determine quadrant for a data point (right=strong, top=dynamic)
-  const getQuadrant = (strength: number, dynamism: number) => {
-    if (strength >= 50 && dynamism >= 50) return "growth";
-    if (strength >= 50 && dynamism < 50) return "core";
-    if (strength < 50 && dynamism >= 50) return "restructure";
-    return "nurture";
+  // Save placement when drag ends or justification changes
+  const handleLock = async () => {
+    const pos = localDragPos || dragPos;
+    if (!pos || !justification.trim()) return;
+    const aiPos = computeAIPosition(cards.find((c) => c.shareCode === myShareCode) || cards[0]);
+    await savePlacement(myShareCode, pos, justification, aiPos);
+    await lockPlacement(myShareCode);
   };
 
-  const quadrantInfo = {
-    growth: { label: "Growth Business", icon: "🚀", color: "text-blue-800", desc: "Accelerate growth by concentrating resources" },
-    core: { label: "Core Business", icon: "🛡️", color: "text-slate-700", desc: "Improve efficiency and polish strengths" },
-    nurture: { label: "Nurturing Business", icon: "🌱", color: "text-emerald-700", desc: "Bold challenges for future growth" },
-    restructure: { label: "Restructuring Zone", icon: "⚠️", color: "text-amber-700", desc: "Reevaluate and reallocate resources" },
+  // Submit a challenge
+  const submitChallenge = async () => {
+    if (!challengeText.trim() || !selectedMember || !user) return;
+    const entry: ChallengeEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type: "human-challenge",
+      authorName: myPlacement?.ownerName || user.email || "Unknown",
+      authorUID: user.uid,
+      text: challengeText.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    await addChallenge(selectedMember, entry);
+    setChallengeText("");
   };
 
-  // Count divisions per quadrant
-  const quadrantCounts = { growth: 0, core: 0, nurture: 0, restructure: 0 };
-  plotData.forEach(d => { quadrantCounts[getQuadrant(d.strengthScore, d.dynamismScore)]++; });
+  // Trigger AI challenge for selected member
+  const triggerAIChallenge = async () => {
+    if (!selectedPlacement || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const targetCard = cards.find((c) => c.shareCode === selectedMember);
+      const res = await fetch("/api/constellation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cards,
+          action: "member-challenge",
+          targetShareCode: selectedMember,
+          targetCard,
+          selfPosition: selectedPlacement.selfPosition,
+          aiPosition: selectedPlacement.aiPosition,
+          humanChallenges: selectedPlacement.challenges.filter((c) => c.type === "human-challenge"),
+          previousAICommentary: placements
+            .filter((p) => p.aiChallengeGenerated && p.shareCode !== selectedMember)
+            .map((p) => ({ name: p.ownerName, business: p.businessName, challenges: p.challenges.filter((c) => c.type === "ai-challenge") })),
+        }),
+      });
+      const data = await res.json();
+      if (data.text) {
+        const aiEntry: ChallengeEntry = {
+          id: `ai-${Date.now()}`,
+          type: "ai-challenge",
+          authorName: "AI Strategy Coach",
+          authorUID: "ai",
+          text: data.text,
+          timestamp: new Date().toISOString(),
+        };
+        await addChallenge(selectedMember!, aiEntry);
+      }
+    } catch (e) {
+      console.error("AI challenge error:", e);
+    }
+    setAiLoading(false);
+  };
+
+  // Trigger portfolio synthesis
+  const triggerPortfolioSynthesis = async () => {
+    if (portfolioLoading) return;
+    setPortfolioLoading(true);
+    try {
+      const res = await fetch("/api/constellation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cards,
+          action: "portfolio-synthesis",
+          placements: placements.map((p) => ({
+            ownerName: p.ownerName,
+            businessName: p.businessName,
+            selfPosition: p.selfPosition,
+            aiPosition: p.aiPosition,
+            adjustedPosition: p.adjustedPosition,
+            challenges: p.challenges,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (data.text) {
+        await savePortfolioSynthesis(data.text);
+      }
+    } catch (e) {
+      console.error("Portfolio synthesis error:", e);
+    }
+    setPortfolioLoading(false);
+  };
+
+  // ── Render ──
+  const currentDragPos = isDragging && dragPos ? dragPos : localDragPos;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-bold text-slate-800 mb-1">Strategic Portfolio Grid</h3>
-        <p className="text-sm text-slate-500">Each division plotted by Competitive Strength × Market Dynamism</p>
+    <div className="space-y-4">
+      {/* Phase Banner */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800 mb-0.5">
+            {!allRevealed ? "📌 Place Your Business" : selectedMember ? `🔍 Challenging: ${selectedPlacement?.businessName}` : "Strategic Portfolio Grid"}
+          </h3>
+          <p className="text-sm text-slate-500">
+            {!allRevealed
+              ? `Drag your icon to where you believe your business belongs. ${lockedCount}/${placements.length} locked.`
+              : !selectedMember
+              ? "Click any bubble to open their challenge thread"
+              : `Team discussion for ${selectedPlacement?.ownerName}`
+            }
+          </p>
+        </div>
+        {!allRevealed && allLocked && (
+          <button onClick={revealAll} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
+            ✨ Reveal All Positions
+          </button>
+        )}
+        {allRevealed && !selectedMember && !ps?.portfolioSynthesis && (
+          <button onClick={triggerPortfolioSynthesis} disabled={portfolioLoading} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50">
+            {portfolioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "🔮 Portfolio Synthesis"}
+          </button>
+        )}
       </div>
 
-      {/* ── The 2×2 Grid ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <div className="relative" style={{ height: 420 }}>
-          {/* Y-axis label */}
-          <div className="absolute -left-1 top-0 bottom-0 flex items-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
-              <span className="font-normal opacity-60">STABLE</span>
-              <span>← Market Dynamism (5 Forces) →</span>
-              <span className="font-normal opacity-60">INTENSE (HIGH CHANGE)</span>
-            </span>
-          </div>
-
-          {/* X-axis label */}
-          <div className="absolute bottom-0 left-8 right-0 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-2">
-              <span className="font-normal opacity-60">WEAK</span>
-              <span>← Competitive Strength (VRIO + Business Model) →</span>
-              <span className="font-normal opacity-60">STRONG</span>
-            </span>
-          </div>
-
-          {/* Grid area */}
-          <div className="absolute left-8 top-0 right-0 bottom-6 border-l-2 border-b-2 border-slate-200">
-            {/* Quadrant backgrounds */}
-            <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-              {/* Top-Left: Restructuring (weak + dynamic) */}
-              <div className="bg-amber-50/60 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
-                <span className="text-[10px] font-bold text-amber-600/80">⚠️ Restructuring</span>
-                <span className="text-[8px] text-amber-500/70 mt-0.5">Reevaluate & reallocate</span>
-              </div>
-              {/* Top-Right: Growth (strong + dynamic) */}
-              <div className="bg-blue-50/60 border-b border-dashed border-slate-200 p-3 flex flex-col items-end">
-                <span className="text-[10px] font-bold text-blue-600/80">🚀 Growth Business</span>
-                <span className="text-[8px] text-blue-500/70 mt-0.5">Accelerate & expand</span>
-              </div>
-              {/* Bottom-Left: Nurturing (weak + stable) */}
-              <div className="bg-emerald-50/40 border-r border-dashed border-slate-200 p-3 flex flex-col justify-end">
-                <span className="text-[8px] text-emerald-500/70 mb-0.5">Build for the future</span>
-                <span className="text-[10px] font-bold text-emerald-600/80">🌱 Nurturing</span>
-              </div>
-              {/* Bottom-Right: Core (strong + stable) */}
-              <div className="bg-slate-50/60 p-3 flex flex-col items-end justify-end">
-                <span className="text-[8px] text-slate-400 mb-0.5">Improve efficiency</span>
-                <span className="text-[10px] font-bold text-slate-500">🛡️ Core Business</span>
-              </div>
+      <div className="flex gap-4">
+        {/* ── The 2×2 Grid ── */}
+        <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="relative" style={{ height: 420 }}>
+            {/* Y-axis label */}
+            <div className="absolute -left-1 top-0 bottom-0 flex items-center">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
+                <span className="font-normal opacity-60">STABLE</span>
+                <span>← Market Dynamism (5 Forces) →</span>
+                <span className="font-normal opacity-60">INTENSE</span>
+              </span>
             </div>
 
-            {/* Center crosshair labels */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-px border-l border-dashed border-slate-300" />
-            <div className="absolute top-1/2 left-0 right-0 h-px border-t border-dashed border-slate-300" />
+            {/* X-axis label */}
+            <div className="absolute bottom-0 left-8 right-0 text-center">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-2">
+                <span className="font-normal opacity-60">WEAK</span>
+                <span>← Competitive Strength (VRIO + BM) →</span>
+                <span className="font-normal opacity-60">STRONG</span>
+              </span>
+            </div>
 
-            {/* Bubbles */}
-            {plotData.map((d) => {
-              const x = Math.max(5, Math.min(95, d.strengthScore));
-              const y = Math.max(5, Math.min(95, 100 - d.dynamismScore)); // invert Y so high dynamism is top
-              const quadrant = getQuadrant(d.strengthScore, d.dynamismScore);
-              const isHovered = hoveredCard === d.card.shareCode;
-              const bubbleColor = quadrant === "growth" ? "bg-blue-500" : quadrant === "core" ? "bg-slate-500" : quadrant === "nurture" ? "bg-emerald-500" : "bg-amber-500";
-              const ringColor = quadrant === "growth" ? "ring-blue-200" : quadrant === "core" ? "ring-slate-200" : quadrant === "nurture" ? "ring-emerald-200" : "ring-amber-200";
-
-              return (
-                <div
-                  key={d.card.shareCode}
-                  className="absolute transition-all duration-300 ease-out cursor-pointer group"
-                  style={{
-                    left: `${x}%`,
-                    top: `${y}%`,
-                    transform: `translate(-50%, -50%) scale(${isHovered ? 1.2 : 1})`,
-                    zIndex: isHovered ? 50 : 10,
-                  }}
-                  onMouseEnter={() => setHoveredCard(d.card.shareCode)}
-                  onMouseLeave={() => setHoveredCard(null)}
-                >
-                  {/* Bubble */}
-                  <div
-                    className={clsx(
-                      "rounded-full flex items-center justify-center text-white font-bold text-[9px] shadow-lg ring-2 transition-shadow",
-                      bubbleColor, ringColor,
-                      isHovered ? "shadow-xl ring-4" : "shadow-md"
-                    )}
-                    style={{ width: d.bubbleSize, height: d.bubbleSize }}
-                  >
-                    {d.card.ownerName?.split(" ")[0]?.substring(0, 4)}
-                  </div>
-
-                  {/* Tooltip */}
-                  {isHovered && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-900 text-white rounded-xl px-4 py-3 text-[11px] shadow-2xl z-50 pointer-events-none w-max max-w-[280px]">
-                      <p className="font-bold text-sm mb-1">{d.card.businessName}</p>
-                      <p className="text-slate-300 text-[10px] mb-3">{d.card.ownerName} · {d.card.ownerRegion}</p>
-                      
-                      {d.ai ? (
-                        <div className="flex flex-col gap-1.5 text-[10px] mb-2">
-                           <div className="flex items-start gap-2">
-                             <span className="text-slate-400 w-16 flex-shrink-0">Health:</span>
-                             <span className="font-bold text-indigo-300">{d.ai.healthScore} / 100 ✨</span>
-                           </div>
-                           <div className="flex items-start gap-2">
-                             <span className="text-slate-400 w-16 flex-shrink-0">Advantage:</span>
-                             <span className="font-medium whitespace-nowrap">{d.ai.vrio.competitiveAdvantage.replace('Sustained', 'Sustained Advantage').replace('Temporary', 'Temporary Advantage').replace('Parity', 'Competitive Parity').replace('Disadvantage', 'Competitive Disadvantage')}</span>
-                           </div>
-                           <div className="flex items-start gap-2">
-                             <span className="text-slate-400 w-16 flex-shrink-0">Market:</span>
-                             <span className="font-medium whitespace-nowrap">{d.ai.fiveForces.overallAttractiveness} Attractiveness</span>
-                           </div>
-                           <div className="flex items-start gap-2 mt-1">
-                             <span className="text-slate-400 w-16 flex-shrink-0">Priority:</span>
-                             <span className="font-medium italic text-slate-300 whitespace-normal leading-tight">"{d.ai.priorities?.[0]?.text || ''}"</span>
-                           </div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] mb-2">
-                          <span className="text-slate-400">VRIO:</span>
-                          <span className="font-medium">{d.vrioMet}/4 dimensions</span>
-                          <span className="text-slate-400">Business Model:</span>
-                          <span className="font-medium">{d.bmPoints} points</span>
-                          <span className="text-slate-400">5 Forces:</span>
-                          <span className="font-medium">{d.fiveTotal} factors</span>
-                          <span className="text-slate-400">SWOT:</span>
-                          <span className="font-medium text-emerald-400">+{d.swotPos}</span>
-                          <span className="text-slate-400"></span>
-                          <span className="font-medium text-red-400">-{d.swotNeg}</span>
-                        </div>
-                      )}
-
-                      <div className="mt-2 pt-2 border-t border-slate-700 text-[10px]">
-                        <span className="text-slate-400">Quadrant: </span>
-                        <span className="font-semibold">{quadrantInfo[quadrant].icon} {quadrantInfo[quadrant].label}</span>
-                      </div>
-                      {/* Arrow pointer */}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-slate-900" />
-                    </div>
-                  )}
+            {/* Grid area */}
+            <div ref={gridRef} className="absolute left-8 top-0 right-0 bottom-6 border-l-2 border-b-2 border-slate-200" {...(!myPlacement?.locked && !allRevealed ? dragHandlers : {})}>
+              {/* Quadrant backgrounds */}
+              <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
+                <div className="bg-amber-50/60 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
+                  <span className="text-[10px] font-bold text-amber-600/80">⚠️ Restructuring</span>
+                  <span className="text-[8px] text-amber-500/70 mt-0.5">Reevaluate &amp; reallocate</span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Quadrant Summary Cards ── */}
-      <div className="grid grid-cols-2 gap-3">
-        {(["growth", "core", "nurture", "restructure"] as const).map((q) => {
-          const info = quadrantInfo[q];
-          const count = quadrantCounts[q];
-          const divisions = plotData.filter(d => getQuadrant(d.strengthScore, d.dynamismScore) === q);
-          const bgColors = { growth: "bg-blue-50 border-blue-200", core: "bg-slate-50 border-slate-200", nurture: "bg-emerald-50 border-emerald-200", restructure: "bg-amber-50 border-amber-200" };
-          return (
-            <div key={q} className={clsx("rounded-xl border p-3", bgColors[q])}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm">{info.icon}</span>
-                <span className={clsx("text-xs font-bold", info.color)}>{info.label}</span>
-                <span className="text-[10px] bg-white/80 px-1.5 py-0.5 rounded-full font-bold text-slate-500 ml-auto">{count}</span>
+                <div className="bg-blue-50/60 border-b border-dashed border-slate-200 p-3 flex flex-col items-end">
+                  <span className="text-[10px] font-bold text-blue-600/80">🚀 Growth Business</span>
+                  <span className="text-[8px] text-blue-500/70 mt-0.5">Accelerate &amp; expand</span>
+                </div>
+                <div className="bg-emerald-50/40 border-r border-dashed border-slate-200 p-3 flex flex-col justify-end">
+                  <span className="text-[8px] text-emerald-500/70 mb-0.5">Build for the future</span>
+                  <span className="text-[10px] font-bold text-emerald-600/80">🌱 Nurturing</span>
+                </div>
+                <div className="bg-slate-50/60 p-3 flex flex-col items-end justify-end">
+                  <span className="text-[8px] text-slate-400 mb-0.5">Improve efficiency</span>
+                  <span className="text-[10px] font-bold text-slate-500">🛡️ Core Business</span>
+                </div>
               </div>
-              <p className="text-[10px] text-slate-500 mb-2">{info.desc}</p>
-              {divisions.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {divisions.map(d => (
-                    <span key={d.card.shareCode} className="text-[9px] bg-white/70 px-2 py-0.5 rounded-full text-slate-600 font-medium border border-white/50">
-                      {d.card.businessName}
-                    </span>
-                  ))}
+
+              {/* Center crosshair */}
+              <div className="absolute left-1/2 top-0 bottom-0 w-px border-l border-dashed border-slate-300" />
+              <div className="absolute top-1/2 left-0 right-0 h-px border-t border-dashed border-slate-300" />
+
+              {/* ── Bubbles ── */}
+              {placements.map((p) => {
+                const isMe = p.ownerUID === user?.uid;
+                const isMeDragging = isMe && isDragging;
+                const pos = isMe && currentDragPos
+                  ? currentDragPos
+                  : (p.adjustedPosition || p.selfPosition);
+                const isSelected = p.shareCode === selectedMember;
+
+                // During blind phase: only show self
+                if (!allRevealed && !isMe) return null;
+                // If no position yet (hasn't placed), don't render
+                if (!pos && !isMeDragging) return null;
+
+                const displayPos = pos || { x: 50, y: 50 };
+                const quadrant = getQuadrantLabel(displayPos.x, displayPos.y);
+                const bubbleColor = quadrant === "Growth" ? "bg-blue-500" : quadrant === "Core" ? "bg-slate-500" : quadrant === "Nurturing" ? "bg-emerald-500" : "bg-amber-500";
+                const ringColor = isSelected ? "ring-indigo-400" : quadrant === "Growth" ? "ring-blue-200" : quadrant === "Core" ? "ring-slate-200" : quadrant === "Nurturing" ? "ring-emerald-200" : "ring-amber-200";
+
+                return (
+                  <div
+                    key={p.shareCode}
+                    className={clsx(
+                      "absolute transition-all duration-200 ease-out z-10",
+                      isMe && !p.locked && !allRevealed ? "cursor-grab active:cursor-grabbing" : allRevealed ? "cursor-pointer" : "",
+                      isMeDragging && "z-50",
+                      !allRevealed && isMe && !p.locked && "animate-pulse"
+                    )}
+                    style={{
+                      left: `${displayPos.x}%`,
+                      top: `${100 - displayPos.y}%`,
+                      transform: `translate(-50%, -50%) scale(${isSelected ? 1.15 : isMeDragging ? 1.2 : 1})`,
+                    }}
+                    onClick={() => allRevealed && setSelectedMember(p.shareCode === selectedMember ? null : p.shareCode)}
+                    {...(isMe && !p.locked && !allRevealed ? dragHandlers : {})}
+                  >
+                    <div
+                      className={clsx(
+                        "rounded-full flex items-center justify-center text-white font-bold text-[9px] shadow-lg ring-2 transition-all",
+                        bubbleColor, ringColor,
+                        isSelected ? "ring-4 shadow-xl" : "shadow-md",
+                        isMe && !allRevealed && !p.locked && "ring-4 ring-indigo-400"
+                      )}
+                      style={{ width: 44, height: 44 }}
+                    >
+                      {p.ownerName?.split(" ")[0]?.substring(0, 4)}
+                    </div>
+                    {/* Name label */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[9px] font-medium text-slate-600 whitespace-nowrap bg-white/80 px-1.5 py-0.5 rounded">
+                      {p.businessName?.substring(0, 15)}
+                    </div>
+                    {/* Lock badge */}
+                    {!allRevealed && p.locked && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center text-white text-[8px]">✓</div>
+                    )}
+                    {/* Challenge count badge */}
+                    {allRevealed && p.challenges.length > 0 && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[8px] font-bold">
+                        {p.challenges.length}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* AI Position markers — only visible in selected member's challenge panel after AI triggered */}
+              {allRevealed && selectedPlacement?.aiChallengeGenerated && (
+                <div
+                  className="absolute transition-all duration-500 z-5 pointer-events-none"
+                  style={{
+                    left: `${selectedPlacement.aiPosition.x}%`,
+                    top: `${100 - selectedPlacement.aiPosition.y}%`,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                >
+                  <div className="w-11 h-11 rounded-full border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[8px] text-indigo-500 font-medium whitespace-nowrap">AI position</div>
                 </div>
               )}
-            </div>
-          );
-        })}
-      </div>
 
-      {/* ── Division Detail Cards (collapsed) ── */}
-      <details className="group">
-        <summary className="text-sm font-medium text-slate-500 cursor-pointer hover:text-slate-700 transition-colors flex items-center gap-2">
-          <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full">▶</span>
-          View individual division details ({cards.length} divisions)
-        </summary>
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {plotData.map((d) => {
-            const q = getQuadrant(d.strengthScore, d.dynamismScore);
-            const colors = { growth: "border-blue-300", core: "border-slate-300", nurture: "border-emerald-300", restructure: "border-amber-300" };
-            return (
-              <div key={d.card.shareCode} className={clsx("bg-white rounded-xl border-2 shadow-sm overflow-hidden flex flex-col justify-between", colors[q])}>
-                <div>
-                  <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: d.card.color + "10", borderBottom: `2px solid ${d.card.color}` }}>
-                    <div className="overflow-hidden">
-                      <h5 className="text-xs font-bold text-slate-800 truncate">{d.card.businessName}</h5>
-                      <p className="text-[9px] text-slate-500 truncate">{d.card.ownerName} · {d.card.ownerRegion}</p>
-                    </div>
-                    <div className="text-[10px] whitespace-nowrap font-semibold ml-2">
-                      {quadrantInfo[q].icon} <span className={clsx("hidden sm:inline", quadrantInfo[q].color)}>{quadrantInfo[q].label}</span>
-                    </div>
+              {/* Gap line between self and AI position */}
+              {allRevealed && selectedPlacement?.aiChallengeGenerated && selectedPlacement?.selfPosition && (
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+                  <line
+                    x1={`${selectedPlacement.selfPosition.x}%`}
+                    y1={`${100 - selectedPlacement.selfPosition.y}%`}
+                    x2={`${selectedPlacement.aiPosition.x}%`}
+                    y2={`${100 - selectedPlacement.aiPosition.y}%`}
+                    stroke="#818cf8" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6"
+                  />
+                </svg>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Challenge Panel (right side) ── */}
+        {allRevealed && selectedMember && selectedPlacement && (
+          <div className="w-[340px] flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-t-2xl">
+              <h4 className="text-sm font-bold text-indigo-800 flex items-center gap-2">
+                <MessageCircle className="h-4 w-4" />
+                {selectedPlacement.ownerName} — {selectedPlacement.businessName}
+              </h4>
+              <p className="text-[10px] text-indigo-500 mt-0.5">
+                Self: {getQuadrantLabel(selectedPlacement.selfPosition?.x || 50, selectedPlacement.selfPosition?.y || 50)}
+                {selectedPlacement.aiChallengeGenerated && ` · AI: ${getQuadrantLabel(selectedPlacement.aiPosition.x, selectedPlacement.aiPosition.y)}`}
+              </p>
+              {selectedPlacement.justification && (
+                <p className="text-[10px] text-slate-600 mt-1 italic">&ldquo;{selectedPlacement.justification}&rdquo;</p>
+              )}
+            </div>
+
+            {/* Challenge Messages */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[280px]">
+              {selectedPlacement.challenges.length === 0 && (
+                <div className="text-center py-6 text-slate-400">
+                  <MessageCircle className="h-6 w-6 mx-auto mb-2 text-slate-300" />
+                  <p className="text-xs">No challenges yet. Be the first!</p>
+                </div>
+              )}
+              {selectedPlacement.challenges.map((c) => (
+                <div key={c.id} className={clsx(
+                  "rounded-xl px-3 py-2 text-sm",
+                  c.type === "ai-challenge"
+                    ? "bg-indigo-50 border border-indigo-100"
+                    : c.authorUID === user?.uid
+                    ? "bg-blue-50 border border-blue-100 ml-4"
+                    : "bg-slate-50 border border-slate-100"
+                )}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {c.type === "ai-challenge" ? (
+                      <Bot className="h-3 w-3 text-indigo-500" />
+                    ) : (
+                      <MessageCircle className="h-3 w-3 text-slate-400" />
+                    )}
+                    <span className={clsx("text-[10px] font-bold", c.type === "ai-challenge" ? "text-indigo-600" : "text-slate-500")}>
+                      {c.authorName}
+                    </span>
+                    <span className="text-[9px] text-slate-300 ml-auto">
+                      {new Date(c.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
                   </div>
-                  
-                  {d.ai ? (
-                    <div className="px-4 py-3">
-                      <div className="flex flex-wrap items-center justify-between mb-2.5 gap-2">
-                        <div className="flex items-center gap-1.5 text-[10px]">
-                          <span className="font-bold text-indigo-600 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                            <Sparkles className="w-2.5 h-2.5" /> {d.ai.healthScore}/100 Health
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wider">
-                          <span className="text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                            {d.ai.vrio.competitiveAdvantage.replace('Sustained', 'Sustained Advantage').replace('Temporary', 'Temporary Advantage').replace('Parity', 'Competitive Parity').replace('Disadvantage', 'Competitive Disadvantage')}
-                          </span>
-                          <span className="text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                            {d.ai.fiveForces.overallAttractiveness} Attractiveness
-                          </span>
-                        </div>
-                      </div>
-                      <div className="bg-slate-50/80 rounded-lg p-2.5 text-[10px] text-slate-600 leading-relaxed italic text-justify line-clamp-3">
-                        "{d.ai.narrative}"
-                      </div>
+                  {c.type === "ai-challenge" ? (
+                    <div className="prose prose-sm prose-indigo max-w-none text-[11px] [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-xs [&>h3]:font-bold [&>h3]:mt-2">
+                      <ReactMarkdown>{c.text}</ReactMarkdown>
                     </div>
                   ) : (
-                    <div className="px-4 py-3 grid grid-cols-4 gap-2 text-[10px]">
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">VRIO</span>
-                        <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{d.vrioMet}/4</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">BM</span>
-                        <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{d.bmPoints}pts</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">5F</span>
-                        <span className="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{d.fiveTotal}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">SWOT</span>
-                        <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-l border-y border-l border-emerald-200">+{d.swotPos}</span>
-                        <span className="font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded-r border-y border-r border-red-200">-{d.swotNeg}</span>
-                      </div>
-                    </div>
+                    <p className="text-[11px] text-slate-700">{c.text}</p>
                   )}
                 </div>
+              ))}
+              <div ref={challengeEndRef} />
+            </div>
+
+            {/* Input + buttons */}
+            <div className="p-3 border-t border-slate-100 space-y-2">
+              {/* Challenge input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={challengeText}
+                  onChange={(e) => setChallengeText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitChallenge()}
+                  placeholder="Challenge this position..."
+                  className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <button onClick={submitChallenge} disabled={!challengeText.trim()} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                  <Send className="h-4 w-4" />
+                </button>
               </div>
-            );
-          })}
+              {/* AI Challenge button */}
+              <button
+                onClick={triggerAIChallenge}
+                disabled={aiLoading}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl text-sm font-semibold hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 transition-all shadow-sm"
+              >
+                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                {aiLoading ? "AI is analyzing..." : "🤖 AI Challenge Me"}
+              </button>
+              {/* Adjust position button (for the owner of this analysis) */}
+              {selectedPlacement.ownerUID === user?.uid && selectedPlacement.aiChallengeGenerated && (
+                <button
+                  onClick={() => {
+                    // Enable drag mode for adjustment — just reset lock so they can re-drag
+                    const pos = localDragPos || selectedPlacement.selfPosition;
+                    if (pos) adjustPosition(selectedMember!, pos);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors"
+                >
+                  <Move className="h-4 w-4" /> Adjust My Position
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Justification panel (blind phase, for self) */}
+        {!allRevealed && (
+          <div className="w-[280px] flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3">
+            <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+              <Move className="h-4 w-4 text-indigo-500" />
+              Your Placement
+            </h4>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Drag your icon on the grid. Think about where your business honestly sits in terms of <strong>competitive strength</strong> and <strong>market dynamism</strong>.
+            </p>
+            {currentDragPos && (
+              <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2">
+                📍 {getQuadrantLabel(currentDragPos.x, currentDragPos.y)} quadrant
+              </div>
+            )}
+            <textarea
+              value={justification}
+              onChange={(e) => setJustification(e.target.value)}
+              placeholder="Why did you place yourself here? (required)"
+              className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+              rows={3}
+            />
+            <button
+              onClick={handleLock}
+              disabled={!currentDragPos || !justification.trim() || myPlacement?.locked}
+              className={clsx(
+                "w-full py-2.5 rounded-xl text-sm font-semibold transition-colors",
+                myPlacement?.locked
+                  ? "bg-emerald-100 text-emerald-700 cursor-default"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              {myPlacement?.locked ? "✓ Position Locked" : "🔒 Lock My Position"}
+            </button>
+            {myPlacement?.locked && !allLocked && (
+              <p className="text-[10px] text-slate-400 text-center">Waiting for others... ({lockedCount}/{placements.length})</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Completed members bar */}
+      {allRevealed && (
+        <div className="flex flex-wrap gap-2">
+          {placements.map((p) => (
+            <button
+              key={p.shareCode}
+              onClick={() => setSelectedMember(p.shareCode === selectedMember ? null : p.shareCode)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                p.shareCode === selectedMember
+                  ? "bg-indigo-100 border-indigo-300 text-indigo-700"
+                  : p.aiChallengeGenerated
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  : "bg-white border-slate-200 text-slate-600 hover:border-indigo-200"
+              )}
+            >
+              {p.aiChallengeGenerated && <span>✓</span>}
+              {p.businessName?.substring(0, 20)}
+              {p.challenges.length > 0 && (
+                <span className="bg-slate-200 text-slate-600 text-[9px] px-1.5 py-0.5 rounded-full">{p.challenges.length}</span>
+              )}
+            </button>
+          ))}
         </div>
-      </details>
+      )}
+
+      {/* Portfolio Synthesis */}
+      {ps?.portfolioSynthesis && (
+        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-5 border border-purple-100">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-purple-600" />
+            <h4 className="text-sm font-bold text-purple-800">Portfolio Synthesis</h4>
+          </div>
+          <div className="prose prose-sm prose-purple max-w-none text-slate-700 [&>p]:my-2 [&>ul]:my-2 [&>ol]:my-2 [&>h3]:text-sm [&>h3]:font-bold [&>h3]:text-purple-800 [&>h3]:mt-3">
+            <ReactMarkdown>{ps.portfolioSynthesis}</ReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

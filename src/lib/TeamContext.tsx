@@ -43,6 +43,37 @@ export interface DimensionData {
   coachingQuestions: string[];
 }
 
+// ── V8: Placement / Challenge Types ──
+
+export interface ChallengeEntry {
+  id: string;
+  type: "human-challenge" | "ai-challenge" | "response";
+  authorName: string;
+  authorUID: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface MemberPlacement {
+  shareCode: string;
+  ownerUID: string;
+  ownerName: string;
+  businessName: string;
+  selfPosition: { x: number; y: number } | null;
+  justification: string;
+  locked: boolean;
+  aiPosition: { x: number; y: number };
+  adjustedPosition: { x: number; y: number } | null;
+  challenges: ChallengeEntry[];
+  aiChallengeGenerated: boolean;
+}
+
+export interface PlacementState {
+  placements: MemberPlacement[];
+  allRevealed: boolean;
+  portfolioSynthesis: string | null;
+}
+
 export interface TeamData {
   teamName: string;
   joinCode: string;
@@ -54,6 +85,7 @@ export interface TeamData {
   dimensions: DimensionData | null;
   projectCanvas: ProjectCanvas | null;
   chatMessages: ChatMessage[];
+  placementState: PlacementState | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +107,15 @@ interface TeamContextType {
   saveDimensions: (data: DimensionData) => Promise<void>;
   saveProjectCanvas: (canvas: ProjectCanvas) => Promise<void>;
   addChatMessage: (message: ChatMessage) => Promise<void>;
+
+  // V8: Placement actions
+  savePlacement: (shareCode: string, position: { x: number; y: number }, justification: string, aiPosition: { x: number; y: number }) => Promise<void>;
+  lockPlacement: (shareCode: string) => Promise<void>;
+  revealAll: () => Promise<void>;
+  addChallenge: (targetShareCode: string, entry: ChallengeEntry) => Promise<void>;
+  adjustPosition: (shareCode: string, newPosition: { x: number; y: number }) => Promise<void>;
+  savePortfolioSynthesis: (synthesis: string) => Promise<void>;
+  initPlacements: (cards: HealthCard[], computeAIPosition: (card: HealthCard) => { x: number; y: number }) => Promise<void>;
 
   // Derived
   isLeader: boolean;
@@ -179,6 +220,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       dimensions: null,
       projectCanvas: null,
       chatMessages: [],
+      placementState: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -296,6 +338,144 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
   }, [teamCode]);
 
+  // ── V8: Placement Actions ──
+
+  const initPlacements = useCallback(async (
+    cards: HealthCard[],
+    computeAIPosition: (card: HealthCard) => { x: number; y: number }
+  ) => {
+    if (!teamCode || !team) return;
+    // Don't re-init if already exists
+    if (team.placementState?.placements?.length) return;
+    const placements: MemberPlacement[] = cards.map((card) => ({
+      shareCode: card.shareCode,
+      ownerUID: card.ownerUID || "",
+      ownerName: card.ownerName,
+      businessName: card.businessName,
+      selfPosition: null,
+      justification: "",
+      locked: false,
+      aiPosition: computeAIPosition(card),
+      adjustedPosition: null,
+      challenges: [],
+      aiChallengeGenerated: false,
+    }));
+    const state: PlacementState = { placements, allRevealed: false, portfolioSynthesis: null };
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        placementState: state,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Init placements error:", e);
+    }
+  }, [teamCode, team]);
+
+  const savePlacement = useCallback(async (
+    shareCode: string,
+    position: { x: number; y: number },
+    justification: string,
+    aiPosition: { x: number; y: number }
+  ) => {
+    if (!teamCode || !team?.placementState) return;
+    const updated = {
+      ...team.placementState,
+      placements: team.placementState.placements.map((p) =>
+        p.shareCode === shareCode
+          ? { ...p, selfPosition: position, justification, aiPosition }
+          : p
+      ),
+    };
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        placementState: updated,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Save placement error:", e);
+    }
+  }, [teamCode, team]);
+
+  const lockPlacement = useCallback(async (shareCode: string) => {
+    if (!teamCode || !team?.placementState) return;
+    const updated = {
+      ...team.placementState,
+      placements: team.placementState.placements.map((p) =>
+        p.shareCode === shareCode ? { ...p, locked: true } : p
+      ),
+    };
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        placementState: updated,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Lock placement error:", e);
+    }
+  }, [teamCode, team]);
+
+  const revealAll = useCallback(async () => {
+    if (!teamCode || !team?.placementState) return;
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        "placementState.allRevealed": true,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Reveal all error:", e);
+    }
+  }, [teamCode, team]);
+
+  const addChallenge = useCallback(async (targetShareCode: string, entry: ChallengeEntry) => {
+    if (!teamCode || !team?.placementState) return;
+    const updated = {
+      ...team.placementState,
+      placements: team.placementState.placements.map((p) =>
+        p.shareCode === targetShareCode
+          ? { ...p, challenges: [...p.challenges, entry], ...(entry.type === "ai-challenge" ? { aiChallengeGenerated: true } : {}) }
+          : p
+      ),
+    };
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        placementState: updated,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Add challenge error:", e);
+    }
+  }, [teamCode, team]);
+
+  const adjustPosition = useCallback(async (shareCode: string, newPosition: { x: number; y: number }) => {
+    if (!teamCode || !team?.placementState) return;
+    const updated = {
+      ...team.placementState,
+      placements: team.placementState.placements.map((p) =>
+        p.shareCode === shareCode ? { ...p, adjustedPosition: newPosition } : p
+      ),
+    };
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        placementState: updated,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Adjust position error:", e);
+    }
+  }, [teamCode, team]);
+
+  const savePortfolioSynthesis = useCallback(async (synthesis: string) => {
+    if (!teamCode || !team?.placementState) return;
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        "placementState.portfolioSynthesis": synthesis,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Save portfolio synthesis error:", e);
+    }
+  }, [teamCode, team]);
+
   // ── Derived ──
   const isLeader = !!user && !!team && team.leaderUID === user.uid;
   const isInTeam = !!team && !!user && team.memberUIDs.includes(user.uid);
@@ -313,6 +493,13 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         saveDimensions,
         saveProjectCanvas,
         addChatMessage,
+        savePlacement,
+        lockPlacement,
+        revealAll,
+        addChallenge,
+        adjustPosition,
+        savePortfolioSynthesis,
+        initPlacements,
         isLeader,
         isInTeam,
       }}

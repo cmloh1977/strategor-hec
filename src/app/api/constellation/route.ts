@@ -217,6 +217,125 @@ export async function POST(req: Request) {
       systemPrompt = PATTERN_PROMPT;
     }
 
+    // ── V8: Member Challenge (per-member AI commentary) ──
+    if (action === 'member-challenge') {
+      const { targetCard, selfPosition, aiPosition, humanChallenges, previousAICommentary } = body;
+      if (!targetCard) {
+        return NextResponse.json({ error: "Missing target card" }, { status: 400 });
+      }
+
+      const targetAnalysis = formatMemberAnalysis(targetCard);
+      const selfQ = selfPosition ? `Competitive Strength ${selfPosition.x.toFixed(0)}%, Market Dynamism ${selfPosition.y.toFixed(0)}%` : "Not placed";
+      const aiQ = aiPosition ? `Competitive Strength ${aiPosition.x.toFixed(0)}%, Market Dynamism ${aiPosition.y.toFixed(0)}%` : "Not computed";
+      
+      const challengeSummary = humanChallenges?.length > 0
+        ? humanChallenges.map((c: any) => `[${c.authorName}]: ${c.text}`).join('\n')
+        : "(No team challenges yet)";
+
+      const prevAI = previousAICommentary?.length > 0
+        ? previousAICommentary.map((p: any) => `[${p.name} — ${p.business}]: ${p.challenges?.map((c: any) => c.text).join(' ')}`).join('\n\n')
+        : "(This is the first member being challenged)";
+
+      const memberChallengePrompt = `You are a senior strategy consultant acting as the AI facilitator in a collaborative strategic portfolio mapping exercise.
+
+A team is mapping their businesses on a 2×2 Strategic Portfolio Grid:
+- X-axis: Competitive Strength (VRIO + Business Model) — 0% (Weak) to 100% (Strong)
+- Y-axis: Market Dynamism (5 Forces intensity) — 0% (Stable) to 100% (Intense/High Change)
+
+Quadrants:
+- Top-Right (High strength + High dynamism) = Growth Business — invest and expand
+- Bottom-Right (High strength + Low dynamism) = Core Business — maintain and optimize
+- Top-Left (Low strength + High dynamism) = Restructuring Zone — reevaluate or exit
+- Bottom-Left (Low strength + Low dynamism) = Nurturing — build capabilities for future
+
+## YOUR TASK
+
+The member "${targetCard.ownerName}" (${targetCard.businessName}) has placed themselves on the grid.
+
+**Self-placement:** ${selfQ}
+**AI data-based position:** ${aiQ}
+
+Their analysis data:
+${targetAnalysis}
+
+The team has already challenged them:
+${challengeSummary}
+
+Previous AI commentary for other members (for cross-referencing patterns):
+${prevAI}
+
+## INSTRUCTIONS
+
+1. **Acknowledge the GAP** between where they placed themselves and where the data suggests they should be. Be specific about which data points drive the difference.
+2. **Build on team challenges** — don't repeat what humans already said. Add NEW insight they missed.
+3. **Cross-reference** with other members if you see patterns (e.g., "Interestingly, [other member] was also challenged on supplier dependency").
+4. **Ask 2-3 SPECIFIC strategic questions** that force deeper thinking. Reference actual data from their analysis.
+5. **Be constructive** — the goal is clarity, not punishment. If their self-placement is close to the data, acknowledge what they got right.
+
+Format your response in markdown. Use ### headers for sections. Keep it concise (250-400 words).`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ role: 'user', parts: [{ text: `Challenge this member's strategic positioning:\n\n${targetAnalysis}` }] }],
+        config: {
+          systemInstruction: memberChallengePrompt,
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        },
+      });
+
+      return NextResponse.json({ text: response.text || "" });
+    }
+
+    // ── V8: Portfolio Synthesis (collective view after all rounds) ──
+    if (action === 'portfolio-synthesis') {
+      const { placements } = body;
+
+      const placementSummary = placements?.map((p: any) => {
+        const selfQ = p.selfPosition ? `(${p.selfPosition.x.toFixed(0)}%, ${p.selfPosition.y.toFixed(0)}%)` : "Not placed";
+        const aiQ = p.aiPosition ? `(${p.aiPosition.x.toFixed(0)}%, ${p.aiPosition.y.toFixed(0)}%)` : "N/A";
+        const adjQ = p.adjustedPosition ? `(${p.adjustedPosition.x.toFixed(0)}%, ${p.adjustedPosition.y.toFixed(0)}%)` : "No adjustment";
+        const challenges = p.challenges?.map((c: any) => `  [${c.type}] ${c.authorName}: ${c.text.substring(0, 200)}`).join('\n') || "  (none)";
+        return `${p.ownerName} / ${p.businessName}:\n  Self: ${selfQ} | AI: ${aiQ} | Adjusted: ${adjQ}\n  Challenges:\n${challenges}`;
+      }).join('\n\n') || "(No placements)";
+
+      const portfolioPrompt = `You are a senior strategy consultant synthesizing a team's collaborative Strategic Portfolio Mapping exercise.
+
+The team mapped their businesses on a 2×2 grid (Competitive Strength × Market Dynamism). Each member placed themselves, was challenged by teammates and AI, and optionally adjusted their position.
+
+Here is the complete data:
+
+ALL TEAM MEMBERS' ANALYSES:
+${teamSummary}
+
+PLACEMENT RESULTS:
+${placementSummary}
+
+## YOUR TASK
+
+Generate a portfolio-level synthesis that:
+
+1. **Summarize the self-assessment vs. data gap pattern** — Did most members overestimate or underestimate? What does this say about the team's strategic awareness?
+2. **Identify shared vulnerabilities** surfaced through challenges — What concerns came up repeatedly across members?
+3. **Analyze portfolio balance** — Is the team clustered in one quadrant? Are there missing quadrants? What does this mean strategically?
+4. **Bridge to Level 2** — Based on this mapping, what cross-team patterns should the team explore next? What potential synergies or shared projects emerge?
+5. **Ask 3 provocative portfolio-level questions** that the team should discuss together.
+
+Format in markdown with ### headers. Be specific — reference member names and their businesses. Keep it to 400-600 words.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ role: 'user', parts: [{ text: `Synthesize this team's strategic portfolio mapping:\n\n${placementSummary}` }] }],
+        config: {
+          systemInstruction: portfolioPrompt,
+          temperature: 0.7,
+          maxOutputTokens: 3072,
+        },
+      });
+
+      return NextResponse.json({ text: response.text || "" });
+    }
+
     // For chat action, use a custom prompt with history context
     if (action === 'chat') {
       const { message, chatHistory: convoHistory } = body;
