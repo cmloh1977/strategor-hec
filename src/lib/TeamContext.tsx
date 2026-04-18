@@ -66,6 +66,7 @@ export interface MemberPlacement {
   adjustedPosition: { x: number; y: number } | null;
   challenges: ChallengeEntry[];
   aiChallengeGenerated: boolean;
+  bubbleSize: number; // 1-10 scale, default 5
 }
 
 export interface PlacementState {
@@ -109,7 +110,7 @@ interface TeamContextType {
   addChatMessage: (message: ChatMessage) => Promise<void>;
 
   // V8: Placement actions
-  savePlacement: (shareCode: string, position: { x: number; y: number }, justification: string, aiPosition: { x: number; y: number }, lock?: boolean) => Promise<void>;
+  savePlacement: (shareCode: string, position: { x: number; y: number }, justification: string, aiPosition: { x: number; y: number }, lock?: boolean, bubbleSize?: number) => Promise<void>;
   lockPlacement: (shareCode: string) => Promise<void>;
   revealAll: () => Promise<void>;
   addChallenge: (targetShareCode: string, entry: ChallengeEntry) => Promise<void>;
@@ -360,6 +361,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       adjustedPosition: null,
       challenges: [],
       aiChallengeGenerated: false,
+      bubbleSize: 5,
     }));
     const state: PlacementState = { placements, allRevealed: false, portfolioSynthesis: null };
     try {
@@ -377,14 +379,15 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     position: { x: number; y: number },
     justification: string,
     aiPosition: { x: number; y: number },
-    lock: boolean = false
+    lock: boolean = false,
+    bubbleSize?: number
   ) => {
     if (!teamCode || !team?.placementState) return;
     const updated = {
       ...team.placementState,
       placements: team.placementState.placements.map((p) =>
         p.shareCode === shareCode
-          ? { ...p, selfPosition: position, justification, aiPosition, ...(lock ? { locked: true } : {}) }
+          ? { ...p, selfPosition: position, justification, aiPosition, ...(lock ? { locked: true } : {}), ...(bubbleSize !== undefined ? { bubbleSize } : {}) }
           : p
       ),
     };

@@ -298,6 +298,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [justification, setJustification] = useState("");
   const [localDragPos, setLocalDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [localBubbleSize, setLocalBubbleSize] = useState(5);
   const gridRef = useRef<HTMLDivElement>(null);
   const challengeEndRef = useRef<HTMLDivElement>(null);
 
@@ -324,7 +325,10 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
     if (myPlacement?.justification && !justification) {
       setJustification(myPlacement.justification);
     }
-  }, [myPlacement?.selfPosition, myPlacement?.justification]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (myPlacement?.bubbleSize && localBubbleSize === 5) {
+      setLocalBubbleSize(myPlacement.bubbleSize);
+    }
+  }, [myPlacement?.selfPosition, myPlacement?.justification, myPlacement?.bubbleSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll challenge panel to bottom
   useEffect(() => {
@@ -354,7 +358,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
     const pos = localDragPos || dragPos;
     if (!pos || !justification.trim()) return;
     const aiPos = computeAIPosition(cards.find((c) => c.shareCode === myShareCode) || cards[0]);
-    await savePlacement(myShareCode, pos, justification, aiPos, true); // true = lock
+    await savePlacement(myShareCode, pos, justification, aiPos, true, localBubbleSize); // true = lock
   };
 
   // Submit a challenge
@@ -587,12 +591,16 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                   >
                     <div
                       className={clsx(
-                        "rounded-full flex items-center justify-center text-white font-bold text-[9px] shadow-lg ring-2 transition-all",
+                        "rounded-full flex items-center justify-center text-white font-bold shadow-lg ring-2 transition-all",
                         bubbleColor, ringColor,
                         isSelected ? "ring-4 shadow-xl" : "shadow-md",
                         isMe && !allRevealed && !p.locked && "ring-4 ring-indigo-400"
                       )}
-                      style={{ width: 44, height: 44 }}
+                      style={{
+                        width: (() => { const s = isMe && !p.locked ? localBubbleSize : (p.bubbleSize || 5); return 28 + (s - 1) * 6; })(),
+                        height: (() => { const s = isMe && !p.locked ? localBubbleSize : (p.bubbleSize || 5); return 28 + (s - 1) * 6; })(),
+                        fontSize: (() => { const s = isMe && !p.locked ? localBubbleSize : (p.bubbleSize || 5); return s >= 7 ? 11 : s >= 4 ? 9 : 8; })(),
+                      }}
                     >
                       {p.ownerName?.split(" ")[0]?.substring(0, 4)}
                     </div>
@@ -781,6 +789,28 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 📍 {getQuadrantLabel(activeDragPos.x, activeDragPos.y)} quadrant
               </div>
             )}
+            {/* Business Scale slider */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-slate-600">📏 Business Scale</label>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  {localBubbleSize <= 3 ? "Small" : localBubbleSize <= 6 ? "Medium" : localBubbleSize <= 8 ? "Large" : "Dominant"}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={10}
+                value={localBubbleSize}
+                onChange={(e) => setLocalBubbleSize(Number(e.target.value))}
+                disabled={myPlacement?.locked}
+                className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <div className="flex justify-between text-[8px] text-slate-300 px-0.5">
+                <span>Small</span>
+                <span>Large</span>
+              </div>
+            </div>
             <textarea
               value={justification}
               onChange={(e) => setJustification(e.target.value)}
