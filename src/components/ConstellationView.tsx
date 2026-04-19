@@ -490,7 +490,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
         </div>
       </div>
 
-      <div className="flex gap-4" style={{ height: 'calc(100vh - 200px)', minHeight: 480 }}>
+      <div className="flex gap-4" style={{ height: 'calc(100vh - 280px)', minHeight: 400 }}>
         {/* ── The 2×2 Grid ── */}
         <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
           <div className="relative h-full">
