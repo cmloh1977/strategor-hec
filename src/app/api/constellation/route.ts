@@ -279,7 +279,7 @@ Use this exact format:
 Total response: 100-180 words maximum. Questions only, no answers.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3-flash-preview',
         contents: [{ role: 'user', parts: [{ text: `Challenge this member's strategic positioning:\n\n${targetAnalysis}` }] }],
         config: {
           systemInstruction: memberChallengePrompt,
@@ -328,7 +328,7 @@ Generate a portfolio-level synthesis that:
 Format in markdown with ### headers. Be specific — reference member names and their businesses. Keep it to 400-600 words.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3-flash-preview',
         contents: [{ role: 'user', parts: [{ text: `Synthesize this team's strategic portfolio mapping:\n\n${placementSummary}` }] }],
         config: {
           systemInstruction: portfolioPrompt,
@@ -384,7 +384,7 @@ IMPORTANT: You know every team member's full analysis AND coaching journey. Use 
       ];
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3-flash-preview',
         contents: messages,
         config: {
           systemInstruction: constellationChatPrompt,
@@ -398,7 +398,7 @@ IMPORTANT: You know every team member's full analysis AND coaching journey. Use 
 
     // Structured analysis (patterns or dimensions)
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       contents: [{ role: 'user', parts: [{ text: teamSummary }] }],
       config: {
         systemInstruction: systemPrompt,

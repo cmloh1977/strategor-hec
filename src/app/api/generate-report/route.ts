@@ -259,7 +259,7 @@ ${JSON.stringify(aiScores, null, 2)}
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-3-flash-preview',
           contents: [{ role: 'user', parts: [{ text: analysisText }] }],
           config: {
             systemInstruction: REPORT_PROMPT,
