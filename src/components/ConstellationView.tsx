@@ -589,7 +589,10 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                       top: `${100 - displayPos.y}%`,
                       transform: `translate(-50%, -50%) scale(${isSelected ? 1.15 : isMeDragging ? 1.2 : 1})`,
                     }}
-                    onClick={() => allRevealed && setSelectedMember(p.shareCode === selectedMember ? null : p.shareCode)}
+                    onClick={() => {
+                      if (adjusting && isMe) return; // don't deselect while adjusting
+                      if (allRevealed) setSelectedMember(p.shareCode === selectedMember ? null : p.shareCode);
+                    }}
                     {...(canDrag ? dragHandlers : {})}
                   >
                     <div
@@ -600,9 +603,9 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                         isMe && !allRevealed && !p.locked && "ring-4 ring-indigo-400"
                       )}
                       style={{
-                        width: (() => { const s = isMe && !p.locked ? localBubbleSize : (p.bubbleSize || 5); return 28 + (s - 1) * 6; })(),
-                        height: (() => { const s = isMe && !p.locked ? localBubbleSize : (p.bubbleSize || 5); return 28 + (s - 1) * 6; })(),
-                        fontSize: (() => { const s = isMe && !p.locked ? localBubbleSize : (p.bubbleSize || 5); return s >= 7 ? 11 : s >= 4 ? 9 : 8; })(),
+                        width: (() => { const s = isMe && (!p.locked || adjusting) ? localBubbleSize : (p.bubbleSize || 5); return 28 + (s - 1) * 6; })(),
+                        height: (() => { const s = isMe && (!p.locked || adjusting) ? localBubbleSize : (p.bubbleSize || 5); return 28 + (s - 1) * 6; })(),
+                        fontSize: (() => { const s = isMe && (!p.locked || adjusting) ? localBubbleSize : (p.bubbleSize || 5); return s >= 7 ? 11 : s >= 4 ? 9 : 8; })(),
                       }}
                     >
                       {p.ownerName?.split(" ")[0]?.substring(0, 4)}
@@ -734,27 +737,45 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               {/* Adjust position button (for the owner of this analysis) */}
               {selectedPlacement.ownerUID === user?.uid && selectedPlacement.aiChallengeGenerated && (
                 adjusting ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={async () => {
-                        if (localDragPos) {
-                          await adjustPosition(selectedMember!, localDragPos);
-                        }
-                        setAdjusting(false);
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors"
-                    >
-                      ✓ Save New Position
-                    </button>
-                    <button
-                      onClick={() => {
-                        setLocalDragPos(selectedPlacement.adjustedPosition || selectedPlacement.selfPosition);
-                        setAdjusting(false);
-                      }}
-                      className="px-3 py-2 text-slate-500 border border-slate-200 rounded-xl text-sm hover:bg-slate-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                  <div className="space-y-2">
+                    {/* Size slider during adjustment */}
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-slate-600">📏 Growth Potential</label>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {localBubbleSize <= 2 ? "Niche" : localBubbleSize <= 4 ? "Emerging" : localBubbleSize <= 6 ? "Established" : localBubbleSize <= 8 ? "Major" : "Dominant"}
+                      </span>
+                    </div>
+                    <input
+                      type="range" min={1} max={10} value={localBubbleSize}
+                      onChange={(e) => setLocalBubbleSize(Number(e.target.value))}
+                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
+                    <p className="text-[9px] text-amber-600 font-medium">↕ Drag your bubble to reposition, adjust size above</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (localDragPos) {
+                            await adjustPosition(selectedMember!, localDragPos);
+                            // Also save the new bubble size
+                            await savePlacement(selectedMember!, localDragPos, selectedPlacement.justification || '', selectedPlacement.aiPosition, true, localBubbleSize);
+                          }
+                          setAdjusting(false);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors"
+                      >
+                        ✓ Save New Position
+                      </button>
+                      <button
+                        onClick={() => {
+                          setLocalDragPos(selectedPlacement.adjustedPosition || selectedPlacement.selfPosition);
+                          setLocalBubbleSize(selectedPlacement.bubbleSize || 5);
+                          setAdjusting(false);
+                        }}
+                        className="px-3 py-2 text-slate-500 border border-slate-200 rounded-xl text-sm hover:bg-slate-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <button
