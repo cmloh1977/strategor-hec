@@ -4,8 +4,14 @@ import { adminDb } from '@/lib/firebaseAdmin';
 
 const ai = new GoogleGenAI({});
 
-// ── Level 2: Pattern Recognition Prompt ──
-const PATTERN_PROMPT = `You are a senior strategy consultant analyzing a GROUP of business divisions within Toyota Tsusho Corporation (TTC).
+// ── Level 2: Pattern Recognition Prompt (HEC / Strategor) ──
+const PATTERN_PROMPT = `You are a senior strategy consultant coaching a team of business leaders.
+Each team member has completed a strategic analysis of their own business or division using the Strategor framework:
+- Business Model (Odyssey 3.14)
+- Porter's Five Forces
+- VRIO Framework
+- SWOT Synthesis
+
 You have access to each team member's complete strategic analysis data AND their coaching conversation history.
 
 Your task: Identify cross-divisional PATTERNS — shared challenges, common strengths, synergy opportunities, and organizational themes.
@@ -29,32 +35,48 @@ Return ONLY valid JSON (no markdown fences). Structure:
     "<division1>": { "newEntrants": <1-10>, "suppliers": <1-10>, "rivalry": <1-10>, "buyers": <1-10>, "substitutes": <1-10> },
     "<division2>": { ... }
   },
-  "industryInsight": "<2-3 sentence summary of what the combined 5 Forces picture tells us about TTC's competitive landscape>",
+  "industryInsight": "<2-3 sentence summary of what the combined 5 Forces picture tells us about the competitive landscape across these businesses>",
   "teamNarrative": "<3-4 sentence strategic narrative about the team's collective strategic position, key patterns, and biggest shared opportunity>"
 }
 
 Be rigorous. Look for REAL patterns, not forced connections. If only 1 out of 5 divisions shares a trait, that's not a pattern.`;
 
-// ── Level 3: Dimension Mapping Prompt ──
-const DIMENSION_PROMPT = `You are a senior strategy consultant at Toyota Tsusho Corporation (TTC).
-You are helping a GALP team map their cross-divisional patterns to TTC's Mid-Term Business Plan "4 Higher Dimensions":
+// ── Level 3: McKinsey/GE Matrix Synthesis Prompt (HEC / Strategor) ──
+const DIMENSION_PROMPT = `You are a senior strategy consultant coaching a team through corporate-level strategic synthesis using the McKinsey/GE Matrix (also known as the GE-McKinsey Nine-Cell Matrix), as taught in the Strategor framework (Chapter 7).
 
-① GROWTH INVESTMENT — Elevate unique competitiveness + synergies across 3 value domains:
-   - Core Value (mobility value chain, automotive, electronics, logistics)
-   - Nature Value (renewable energy, carbon neutrality, wind/solar, storage)
-   - Social Value (circular economy, recycling, healthcare, Africa/India expansion)
-   Target: ¥450B+ NPAT, ¥1.2T investment over 3 years
+The McKinsey Matrix evaluates each business on TWO axes:
 
-② CAPITAL POLICIES — Optimize capital allocation, improve ROIC, shareholder returns
-   Target: ROE 15%+, 40% payout ratio
+INDUSTRY ATTRACTIVENESS (derived from their 5 Forces analysis + external environment):
+- Market size and growth rate
+- Competitive intensity (from Porter's 5 Forces)
+- Technological change and disruption risk
+- Regulatory environment
+- Profitability potential
+Rate each division: HIGH / MEDIUM / LOW
 
-③ HUMAN CAPITAL & ORGANIZATION — Build people, culture, cross-functional collaboration, engagement
-   Target: Improve engagement scores
+COMPETITIVE STRENGTH (derived from their VRIO analysis + Business Model):
+- Market share and brand strength
+- Resource uniqueness (VRIO dimensions met)
+- Business model differentiation
+- Cost position and operational capabilities
+- Innovation and adaptability
+Rate each division: HIGH / MEDIUM / LOW
 
-④ SUSTAINABILITY MANAGEMENT — ESG integration, circular economy leadership, carbon neutrality
-   Target: Improve ESG ratings
+The 9-cell matrix produces strategic prescriptions:
+┌────────────────────┬─────────────────────┬─────────────────────┐
+│ HIGH Attract.      │ MEDIUM Attract.     │ LOW Attract.        │
+├────────────────────┼─────────────────────┼─────────────────────┤
+│ STRONG: Protect    │ STRONG: Maintain &  │ STRONG: Harvest     │
+│ position, invest   │ grow selectively    │ for profitability   │
+├────────────────────┼─────────────────────┼─────────────────────┤
+│ MEDIUM: Invest to  │ MEDIUM: Manage      │ MEDIUM: Withdraw    │
+│ improve position   │ selectively         │ selectively         │
+├────────────────────┼─────────────────────┼─────────────────────┤
+│ WEAK: Double down  │ WEAK: Divest        │ WEAK: Divest or     │
+│ or give up         │ selectively         │ liquidate           │
+└────────────────────┴─────────────────────┴─────────────────────┘
 
-Given the team's cross-divisional patterns and individual analyses, map each pattern to the relevant dimension(s) and suggest a Group Action Learning Project.
+Given the team's cross-divisional patterns and individual analyses, plot each division on the McKinsey Matrix and suggest a strategic portfolio action plan.
 
 Return ONLY valid JSON:
 
@@ -62,26 +84,37 @@ Return ONLY valid JSON:
   "dimensionMapping": [
     {
       "pattern": "<the cross-divisional pattern>",
-      "dimensions": ["①", "②", "③", "④"],
-      "valueDomain": "<Core|Nature|Social|Cross-domain>",
+      "dimensions": ["<attractiveness level>", "<competitive strength level>"],
+      "valueDomain": "<strategic prescription from matrix>",
       "rationale": "<2 sentences on why this maps here>"
+    }
+  ],
+  "matrixPlacement": [
+    {
+      "division": "<division name>",
+      "industryAttractiveness": "<HIGH|MEDIUM|LOW>",
+      "competitiveStrength": "<HIGH|MEDIUM|LOW>",
+      "attractivenessFactors": "<key factors driving the rating>",
+      "strengthFactors": "<key factors driving the rating>",
+      "prescription": "<strategic prescription from the matrix cell>"
     }
   ],
   "suggestedProject": {
     "title": "<compelling project title>",
-    "dimensions": ["①", "③"],
-    "valueDomain": "<which value domain>",
+    "dimensions": ["<which matrix cells are targeted>"],
+    "valueDomain": "<portfolio-level strategic theme>",
     "challenge": "<the shared challenge this addresses>",
     "hypothesis": "<If we do X, we can achieve Y>",
-    "higherDimensionLeap": "<how this goes beyond optimization to transformation>",
+    "higherDimensionLeap": "<how this goes beyond optimization to create cross-divisional synergies>",
     "divisionsInvolved": ["<list>"],
-    "keyMetrics": ["<ROIC target>", "<other KPIs>"],
+    "keyMetrics": ["<market share target>", "<profitability KPIs>", "<other measurables>"],
     "first90Days": ["<action 1>", "<action 2>", "<action 3>"]
   },
   "coachingQuestions": [
     "<provocative question to push the team's thinking further>"
   ]
 }`;
+
 
 // ── Helper: Build analysis text for one member ──
 function formatMemberAnalysis(card: any, chatHistory?: any): string {
@@ -284,7 +317,7 @@ Total response: 100-180 words maximum. Questions only, no answers.`;
         config: {
           systemInstruction: memberChallengePrompt,
           temperature: 0.7,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 2048,
         },
       });
 
@@ -344,38 +377,40 @@ Format in markdown with ### headers. Be specific — reference member names and 
     if (action === 'chat') {
       const { message, chatHistory: convoHistory } = body;
       
-      const constellationChatPrompt = `You are the TEAM Thinking Partner for a GALP team at Toyota Tsusho Corporation.
+      const constellationChatPrompt = `You are the TEAM Thinking Partner for a strategy team.
 You have access to ALL team members' individual analyses AND their coaching conversations.
-You're now facilitating a GROUP discussion to identify cross-divisional patterns and build toward a Group Action Learning Project.
+You're now facilitating a GROUP discussion to identify cross-divisional patterns, apply the McKinsey/GE Matrix, and build toward a strategic action plan.
 
-TTC's Mid-Term Business Plan "4 Higher Dimensions":
-① Growth Investment — Core Value, Nature Value, Social Value (¥1.2T investment over 3 years, ROIC targets: Core 15%, Social 10%, Nature 5%)
-② Capital Policies — ROE 15%+, 40% payout ratio
-③ Human Capital & Organization — engagement, culture, cross-functional collaboration  
-④ Sustainability Management — ESG, circular economy, carbon neutrality
+The Strategor Framework Context:
+- Each member analyzed their business using: Business Model (Odyssey 3.14), Porter's 5 Forces, VRIO, and SWOT
+- At Level 3, the team maps their businesses onto the McKinsey/GE Matrix:
+  • Y-axis: Industry Attractiveness (from 5 Forces — competitive intensity, growth, disruption risk)
+  • X-axis: Competitive Strength (from VRIO + Business Model — unique resources, differentiation, positioning)
+  • Each cell prescribes a strategic action: Protect, Invest, Maintain, Harvest, Withdraw, Divest
 
 Your role:
 - Be Socratic: Ask questions, don't give answers directly
-- Challenge the team to think at a "higher dimension" — transformation, not just optimization
-- Help them connect their individual challenges to TTC's strategic priorities
-- Push them toward a concrete Group Action Learning Project
+- Challenge the team to think at a PORTFOLIO level — synergies, resource reallocation, parenting advantage
+- Help them use the McKinsey Matrix to identify which businesses deserve investment vs. harvesting
+- Push them toward a concrete strategic action plan based on their matrix positioning
 - Reference specific findings from individual members' analyses
-- When they propose ideas, challenge: "Does this merely optimize or truly elevate to a higher dimension?"
+- When they propose ideas, challenge: "Does this create genuine synergies across businesses, or is each division better off independently?"
+- Use the Strategor vocabulary: competitive advantage, willingness to pay, experience curve, parenting advantage, value creation
 
 ## CRITICAL: Honest Challenge Protocol
 You have FULL ACCESS to every member's analysis data AND their coaching conversations. Use this to:
 
 1. **Call out uniformly rosy analyses.** If multiple members claim sustained competitive advantage or have no significant weaknesses, say so directly: "I notice that [N] out of [Total] of you rated your competitive position very highly. Looking at the actual data, I want to challenge that — [specific example of where the analysis seems overly optimistic]."
 
-2. **Surface hidden shared vulnerabilities.** Look for weaknesses that appear across multiple divisions but may have been downplayed individually. "Three of you mentioned dependency on [X] in passing, but none of you flagged it as a major risk. Collectively, this looks like a systemic vulnerability for TTC."
+2. **Surface hidden shared vulnerabilities.** Look for weaknesses that appear across multiple businesses but may have been downplayed individually. "Three of you mentioned dependency on [X] in passing, but none of you flagged it as a major risk. Collectively, this looks like a systemic vulnerability."
 
-3. **Connect weaknesses to project ideas.** The best Group Action Learning Projects come from honest shared pain, NOT from strengths. Push the team: "Instead of building on what's already working, what if your project tackled the ONE thing that keeps ALL of you up at night?"
+3. **Connect weaknesses to project ideas.** The best strategic action plans come from honest shared pain, NOT from strengths. Push the team: "Instead of building on what's already working, what if your plan tackled the ONE thing that keeps ALL of you up at night?"
 
-4. **Challenge "safe" project proposals.** If the team proposes something incremental or obvious, push back: "This sounds like something your divisions could each do independently. What would a project look like that REQUIRES cross-divisional collaboration and addresses a vulnerability none of you can solve alone?"
+4. **Challenge "safe" project proposals.** If the team proposes something incremental or obvious, push back: "This sounds like something your businesses could each do independently. What would a plan look like that REQUIRES cross-business collaboration and addresses a vulnerability none of you can solve alone?"
 
 5. **Reference coaching conversation insights.** You can see what each member discussed with their individual Thinking Partner. Use this: "During your individual coaching, [Name], you mentioned struggling with [X]. Did anyone else face something similar? This could be the seed of something."
 
-IMPORTANT: You know every team member's full analysis AND coaching journey. Use specific examples from their work to provoke deeper, more honest thinking. The goal is NOT to make everyone feel good — it's to find the real, shared strategic challenges that deserve a transformative project.`;
+IMPORTANT: You know every team member's full analysis AND coaching journey. Use specific examples from their work to provoke deeper, more honest thinking. The goal is NOT to make everyone feel good — it's to find the real, shared strategic challenges that deserve a transformative plan.`;
 
       const messages = [
         { role: 'user' as const, parts: [{ text: `TEAM DATA FOR CONTEXT:\n${teamSummary}` }] },

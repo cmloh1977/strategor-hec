@@ -141,7 +141,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   <input
                     type="text" value={name} onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Kenji Tanaka"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
                 <div>
@@ -149,7 +149,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   <input
                     type="text" value={region} onChange={(e) => setRegion(e.target.value)}
                     placeholder="e.g. Africa Division, Japan HQ..."
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
               </div>
@@ -159,7 +159,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                 <input
                   type="text" value={bizName} onChange={(e) => setBizName(e.target.value)}
                   placeholder="e.g. Auto Parts Logistics, Green Energy Trading..."
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
 
@@ -168,7 +168,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                 <textarea
                   value={bizDesc} onChange={(e) => setBizDesc(e.target.value)}
                   placeholder="A short description of what this business does..."
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none resize-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none resize-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   rows={2}
                 />
               </div>
@@ -178,7 +178,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   <label className="block text-xs font-medium text-slate-600 mb-1">Thinking Partner Language</label>
                   <select
                     value={chatLang} onChange={(e) => setChatLang(e.target.value as AppLanguage)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
                   >
                     {(Object.keys(LANGUAGE_LABELS) as AppLanguage[]).map((k) => (
                       <option key={k} value={k}>{LANGUAGE_FLAGS[k]} {LANGUAGE_LABELS[k]}</option>
@@ -189,7 +189,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   <label className="block text-xs font-medium text-slate-600 mb-1">Difficulty Level</label>
                   <select
                     value={difficulty} onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 bg-white"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
                   >
                     {(Object.keys(DIFFICULTY_LABELS) as DifficultyLevel[]).map((k) => (
                       <option key={k} value={k}>{DIFFICULTY_LABELS[k]}</option>
@@ -201,7 +201,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
               <button
                 onClick={handleStart}
                 disabled={!name.trim() || !region.trim() || !bizName.trim()}
-                className="w-full py-3 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Start My Analysis →
               </button>
@@ -701,7 +701,7 @@ function TeamSection({ onNavigate }: { onNavigate: (view: string) => void }) {
               type="text"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              placeholder="Team name (e.g. GALP Team Alpha)"
+              placeholder="Team name (e.g. HEC Team Alpha)"
               className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               autoFocus
             />

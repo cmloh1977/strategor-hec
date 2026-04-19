@@ -171,7 +171,7 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
         <div className="flex-1 overflow-y-auto p-6">
           {activeLevel === 1 && <CollaborativeGrid cards={cards} />}
           {activeLevel === 2 && (loadingPatterns ? <LoadingSkeleton label="Analyzing cross-divisional patterns..." /> : patterns ? <Level2Patterns data={patterns} cards={cards} /> : null)}
-          {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to TTC's 4 Higher Dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
+          {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to McKinsey/GE 9-Cell Matrix..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
         </div>
 
         {/* Chat Panel (always visible for Levels 2-3) */}
@@ -1024,7 +1024,7 @@ function Level3Strategy({ data }: { data: DimensionData }) {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-bold text-slate-800 mb-1">Strategic Synthesis — Higher Dimensions</h3>
-        <p className="text-sm text-slate-500">Mapping team patterns to TTC&apos;s Mid-Term Business Plan</p>
+        <p className="text-sm text-slate-500">Mapping team patterns to McKinsey/GE 9-Cell Matrix</p>
       </div>
 
       {/* Dimension Mapping */}
@@ -1066,7 +1066,7 @@ function Level3Strategy({ data }: { data: DimensionData }) {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">TTC Dimension(s)</label>
+                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Strategic Prescription</label>
                 <div className="flex gap-1 flex-wrap mt-1">
                   {data.suggestedProject.dimensions?.map((d) => (
                     <span key={d} className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full border", dimLabels[d]?.bg)}>
