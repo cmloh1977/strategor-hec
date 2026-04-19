@@ -490,10 +490,10 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-4" style={{ height: 'calc(100vh - 200px)', minHeight: 480 }}>
         {/* ── The 2×2 Grid ── */}
         <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <div className="relative" style={{ height: 420 }}>
+          <div className="relative h-full">
             {/* Y-axis label */}
             <div className="absolute -left-1 top-0 bottom-0 flex items-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
@@ -651,7 +651,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             </div>
 
             {/* Challenge Messages */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[280px]">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {selectedPlacement.challenges.length === 0 && (
                 <div className="text-center py-6 text-slate-400">
                   <MessageCircle className="h-6 w-6 mx-auto mb-2 text-slate-300" />
@@ -862,31 +862,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
         )}
       </div>
 
-      {/* Completed members bar */}
-      {allRevealed && (
-        <div className="flex flex-wrap gap-2">
-          {placements.map((p) => (
-            <button
-              key={p.shareCode}
-              onClick={() => setSelectedMember(p.shareCode === selectedMember ? null : p.shareCode)}
-              className={clsx(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                p.shareCode === selectedMember
-                  ? "bg-indigo-100 border-indigo-300 text-indigo-700"
-                  : p.aiChallengeGenerated
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-white border-slate-200 text-slate-600 hover:border-indigo-200"
-              )}
-            >
-              {p.aiChallengeGenerated && <span>✓</span>}
-              {p.businessName?.substring(0, 20)}
-              {p.challenges.length > 0 && (
-                <span className="bg-slate-200 text-slate-600 text-[9px] px-1.5 py-0.5 rounded-full">{p.challenges.length}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+
 
 
     </div>
