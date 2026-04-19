@@ -299,6 +299,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
   const [justification, setJustification] = useState("");
   const [localDragPos, setLocalDragPos] = useState<{ x: number; y: number } | null>(null);
   const [localBubbleSize, setLocalBubbleSize] = useState(5);
+  const [adjusting, setAdjusting] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const challengeEndRef = useRef<HTMLDivElement>(null);
 
@@ -344,13 +345,17 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
 
   // Drag handler for self-placement
   const handleDrop = useCallback((pos: { x: number; y: number }) => {
+    if (adjusting) {
+      setLocalDragPos(pos);
+      return;
+    }
     if (!myShareCode || allRevealed) return;
     setLocalDragPos(pos);
-  }, [myShareCode, allRevealed]);
+  }, [myShareCode, allRevealed, adjusting]);
 
   const { isDragging, dragPos, handlers: dragHandlers } = useDragOnGrid(gridRef, {
     onDrop: handleDrop,
-    enabled: !allRevealed && !!myPlacement && !myPlacement.locked,
+    enabled: adjusting || (!allRevealed && !!myPlacement && !myPlacement.locked),
   });
 
   // Save placement AND lock in one atomic write (prevents race condition)
@@ -537,7 +542,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               {placements.map((p) => {
                 const isMe = p.ownerUID === user?.uid;
                 const isMeDragging = isMe && isDragging;
-                const canDrag = isMe && !p.locked && !allRevealed;
+                const canDrag = (isMe && !p.locked && !allRevealed) || (isMe && adjusting);
 
                 // Position priority:
                 // 1. Live drag position (while actively dragging)
@@ -547,6 +552,8 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 let pos: { x: number; y: number } | null;
                 if (isMeDragging && dragPos) {
                   pos = dragPos;  // live drag
+                } else if (isMe && adjusting && localDragPos) {
+                  pos = localDragPos;  // adjusting mode local pos
                 } else if (p.adjustedPosition || p.selfPosition) {
                   pos = p.adjustedPosition || p.selfPosition;  // Firestore = source of truth
                 } else if (isMe && localDragPos) {
@@ -726,16 +733,40 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               })()}
               {/* Adjust position button (for the owner of this analysis) */}
               {selectedPlacement.ownerUID === user?.uid && selectedPlacement.aiChallengeGenerated && (
-                <button
-                  onClick={() => {
-                    // Enable drag mode for adjustment — just reset lock so they can re-drag
-                    const pos = localDragPos || selectedPlacement.selfPosition;
-                    if (pos) adjustPosition(selectedMember!, pos);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors"
-                >
-                  <Move className="h-4 w-4" /> Adjust My Position
-                </button>
+                adjusting ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (localDragPos) {
+                          await adjustPosition(selectedMember!, localDragPos);
+                        }
+                        setAdjusting(false);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors"
+                    >
+                      ✓ Save New Position
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLocalDragPos(selectedPlacement.adjustedPosition || selectedPlacement.selfPosition);
+                        setAdjusting(false);
+                      }}
+                      className="px-3 py-2 text-slate-500 border border-slate-200 rounded-xl text-sm hover:bg-slate-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setLocalDragPos(selectedPlacement.adjustedPosition || selectedPlacement.selfPosition);
+                      setAdjusting(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors"
+                  >
+                    <Move className="h-4 w-4" /> Adjust My Position
+                  </button>
+                )
               )}
             </div>
           </div>
