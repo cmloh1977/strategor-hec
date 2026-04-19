@@ -114,7 +114,7 @@ interface TeamContextType {
   lockPlacement: (shareCode: string) => Promise<void>;
   revealAll: () => Promise<void>;
   addChallenge: (targetShareCode: string, entry: ChallengeEntry) => Promise<void>;
-  adjustPosition: (shareCode: string, newPosition: { x: number; y: number }) => Promise<void>;
+  adjustPosition: (shareCode: string, newPosition: { x: number; y: number }, bubbleSize?: number) => Promise<void>;
   savePortfolioSynthesis: (synthesis: string) => Promise<void>;
   initPlacements: (cards: HealthCard[], computeAIPosition: (card: HealthCard) => { x: number; y: number }) => Promise<void>;
   resetPlacements: () => Promise<void>;
@@ -451,12 +451,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
   }, [teamCode, team]);
 
-  const adjustPosition = useCallback(async (shareCode: string, newPosition: { x: number; y: number }) => {
+  const adjustPosition = useCallback(async (shareCode: string, newPosition: { x: number; y: number }, bubbleSize?: number) => {
     if (!teamCode || !team?.placementState) return;
     const updated = {
       ...team.placementState,
       placements: team.placementState.placements.map((p) =>
-        p.shareCode === shareCode ? { ...p, adjustedPosition: newPosition } : p
+        p.shareCode === shareCode ? { ...p, adjustedPosition: newPosition, ...(bubbleSize !== undefined ? { bubbleSize } : {}) } : p
       ),
     };
     try {

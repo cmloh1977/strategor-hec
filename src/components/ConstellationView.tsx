@@ -755,9 +755,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                       <button
                         onClick={async () => {
                           if (localDragPos) {
-                            await adjustPosition(selectedMember!, localDragPos);
-                            // Also save the new bubble size
-                            await savePlacement(selectedMember!, localDragPos, selectedPlacement.justification || '', selectedPlacement.aiPosition, true, localBubbleSize);
+                            await adjustPosition(selectedMember!, localDragPos, localBubbleSize);
                           }
                           setAdjusting(false);
                         }}
