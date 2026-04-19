@@ -6,7 +6,7 @@
     }
   ],
   "hosting": {
-    "site": "strategor-galp",
+    "site": "strategor-hec",
     "source": ".",
     "ignore": [
       "firebase.json",

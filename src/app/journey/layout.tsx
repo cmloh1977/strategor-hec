@@ -36,10 +36,10 @@ function SidebarContent() {
       <div className="flex-1 overflow-y-auto">
         {/* Header */}
         <div className="h-16 flex items-center px-6 border-b border-slate-100 mb-4">
-          <Zap className="h-6 w-6 text-red-600 mr-3" />
+          <Zap className="h-6 w-6 text-indigo-600 mr-3" />
           <h2 className="font-bold text-lg text-slate-800 tracking-tight flex items-center">
             Strategy Coach
-            <span className="ml-2 bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">v8.1-galp</span>
+            <span className="ml-2 bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">v8.2-hec</span>
           </h2>
         </div>
 
@@ -50,11 +50,11 @@ function SidebarContent() {
             className={clsx(
               "flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
               currentView === "dashboard"
-                ? "bg-red-50 text-red-700"
+                ? "bg-indigo-50 text-indigo-700"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             )}
           >
-            <LayoutDashboard className={clsx("h-5 w-5", currentView === "dashboard" ? "text-red-600" : "text-slate-400")} />
+            <LayoutDashboard className={clsx("h-5 w-5", currentView === "dashboard" ? "text-indigo-600" : "text-slate-400")} />
             <span>Dashboard</span>
           </Link>
 
@@ -74,11 +74,11 @@ function SidebarContent() {
                       className={clsx(
                         "flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors",
                         isActive
-                          ? "bg-red-50 text-red-700 font-semibold"
+                          ? "bg-indigo-50 text-indigo-700 font-semibold"
                           : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                       )}
                     >
-                      <step.icon className={clsx("h-4 w-4", isActive ? "text-red-500" : "text-slate-400")} />
+                      <step.icon className={clsx("h-4 w-4", isActive ? "text-indigo-500" : "text-slate-400")} />
                       <span>{step.name}</span>
                     </Link>
                   );
