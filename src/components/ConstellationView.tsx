@@ -473,11 +473,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               ✨ Reveal All Positions
             </button>
           )}
-          {allRevealed && !selectedMember && !ps?.portfolioSynthesis && (
-            <button onClick={triggerPortfolioSynthesis} disabled={portfolioLoading} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50">
-              {portfolioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "🔮 Portfolio Synthesis"}
-            </button>
-          )}
+
           {isLeader && placements.length > 0 && (
             <button
               onClick={() => { if (confirm("Reset all placements? Everyone will need to re-place.")) { resetPlacements(); setLocalDragPos(null); setJustification(""); } }}
@@ -834,18 +830,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
         </div>
       )}
 
-      {/* Portfolio Synthesis */}
-      {ps?.portfolioSynthesis && (
-        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-5 border border-purple-100">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="h-5 w-5 text-purple-600" />
-            <h4 className="text-sm font-bold text-purple-800">Portfolio Synthesis</h4>
-          </div>
-          <div className="prose prose-sm prose-purple max-w-none text-slate-700 [&>p]:my-2 [&>ul]:my-2 [&>ol]:my-2 [&>h3]:text-sm [&>h3]:font-bold [&>h3]:text-purple-800 [&>h3]:mt-3">
-            <ReactMarkdown>{ps.portfolioSynthesis}</ReactMarkdown>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
