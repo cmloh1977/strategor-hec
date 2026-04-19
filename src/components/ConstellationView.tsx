@@ -622,35 +622,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 );
               })}
 
-              {/* AI Position markers — only visible in selected member's challenge panel after AI triggered */}
-              {allRevealed && selectedPlacement?.aiChallengeGenerated && (
-                <div
-                  className="absolute transition-all duration-500 z-5 pointer-events-none"
-                  style={{
-                    left: `${selectedPlacement.aiPosition.x}%`,
-                    top: `${100 - selectedPlacement.aiPosition.y}%`,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                >
-                  <div className="w-11 h-11 rounded-full border-2 border-dashed border-indigo-400 flex items-center justify-center text-indigo-400">
-                    <Bot className="h-4 w-4" />
-                  </div>
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[8px] text-indigo-500 font-medium whitespace-nowrap">AI position</div>
-                </div>
-              )}
 
-              {/* Gap line between self and AI position */}
-              {allRevealed && selectedPlacement?.aiChallengeGenerated && selectedPlacement?.selfPosition && (
-                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-                  <line
-                    x1={`${selectedPlacement.selfPosition.x}%`}
-                    y1={`${100 - selectedPlacement.selfPosition.y}%`}
-                    x2={`${selectedPlacement.aiPosition.x}%`}
-                    y2={`${100 - selectedPlacement.aiPosition.y}%`}
-                    stroke="#818cf8" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6"
-                  />
-                </svg>
-              )}
             </div>
           </div>
         </div>
@@ -666,7 +638,6 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               </h4>
               <p className="text-[10px] text-indigo-500 mt-0.5">
                 Self: {getQuadrantLabel(selectedPlacement.selfPosition?.x || 50, selectedPlacement.selfPosition?.y || 50)}
-                {selectedPlacement.aiChallengeGenerated && ` · AI: ${getQuadrantLabel(selectedPlacement.aiPosition.x, selectedPlacement.aiPosition.y)}`}
               </p>
               {selectedPlacement.justification && (
                 <p className="text-[10px] text-slate-600 mt-1 italic">&ldquo;{selectedPlacement.justification}&rdquo;</p>
@@ -731,10 +702,10 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                   <Send className="h-4 w-4" />
                 </button>
               </div>
-              {/* AI Challenge button — unlocked after 10+ human challenges */}
+              {/* AI Challenge button — unlocked after 6+ human challenges */}
               {(() => {
                 const humanCount = selectedPlacement.challenges.filter((c) => c.type === "human-challenge").length;
-                const MIN_CHALLENGES = 10;
+                const MIN_CHALLENGES = 6;
                 const unlocked = humanCount >= MIN_CHALLENGES;
                 return (
                   <button

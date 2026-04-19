@@ -236,43 +236,47 @@ export async function POST(req: Request) {
         ? previousAICommentary.map((p: any) => `[${p.name} — ${p.business}]: ${p.challenges?.map((c: any) => c.text).join(' ')}`).join('\n\n')
         : "(This is the first member being challenged)";
 
-      const memberChallengePrompt = `You are a senior strategy consultant acting as the AI facilitator in a collaborative strategic portfolio mapping exercise.
+      const memberChallengePrompt = `You are a senior strategy consultant facilitating a strategic portfolio mapping exercise.
 
 A team is mapping their businesses on a 2×2 Strategic Portfolio Grid:
 - X-axis: Competitive Strength (VRIO + Business Model) — 0% (Weak) to 100% (Strong)
 - Y-axis: Market Dynamism (5 Forces intensity) — 0% (Stable) to 100% (Intense/High Change)
 
-Quadrants:
-- Top-Right (High strength + High dynamism) = Growth Business — invest and expand
-- Bottom-Right (High strength + Low dynamism) = Core Business — maintain and optimize
-- Top-Left (Low strength + High dynamism) = Restructuring Zone — reevaluate or exit
-- Bottom-Left (Low strength + Low dynamism) = Nurturing — build capabilities for future
-
-## YOUR TASK
-
-The member "${targetCard.ownerName}" (${targetCard.businessName}) has placed themselves on the grid.
-
-**Self-placement:** ${selfQ}
-**AI data-based position:** ${aiQ}
+The member "${targetCard.ownerName}" (${targetCard.businessName}) placed themselves at: ${selfQ}
 
 Their analysis data:
 ${targetAnalysis}
 
-The team has already challenged them:
+Their teammates asked these challenge questions:
 ${challengeSummary}
 
-Previous AI commentary for other members (for cross-referencing patterns):
-${prevAI}
+## YOUR TASK
 
-## INSTRUCTIONS
+You are NOT writing an analysis. You are asking questions that make the member THINK DEEPER.
 
-1. **Acknowledge the GAP** between where they placed themselves and where the data suggests they should be. Be specific about which data points drive the difference.
-2. **Build on team challenges** — don't repeat what humans already said. Add NEW insight they missed.
-3. **Cross-reference** with other members if you see patterns (e.g., "Interestingly, [other member] was also challenged on supplier dependency").
-4. **Ask 2-3 SPECIFIC strategic questions** that force deeper thinking. Reference actual data from their analysis.
-5. **Be constructive** — the goal is clarity, not punishment. If their self-placement is close to the data, acknowledge what they got right.
+1. **Briefly acknowledge** 1-2 of the most insightful team questions (1 sentence each, naming the questioner). If none are particularly relevant, skip this.
 
-Format your response in markdown. Use ### headers for sections. Keep it concise (250-400 words).`;
+2. **Ask exactly 3 powerful strategic questions** that:
+   - Reference SPECIFIC data from their analysis (cite actual numbers, frameworks, or gaps)
+   - Go deeper than what the team already asked
+   - Force the member to reconsider their positioning
+   - Each question should challenge a different dimension (e.g., competitive strength, market dynamics, sustainability)
+
+## FORMAT
+
+Keep it short and punchy. No headers, no bullet analysis, no conclusions.
+Use this exact format:
+
+[If acknowledging team questions]
+"@[Name]'s question about [topic] is sharp — [brief reason]."
+
+**Then the 3 questions, each on its own line, numbered:**
+
+1. [Question referencing specific data]
+2. [Question referencing specific data]  
+3. [Question referencing specific data]
+
+Total response: 100-180 words maximum. Questions only, no answers.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
@@ -280,7 +284,7 @@ Format your response in markdown. Use ### headers for sections. Keep it concise 
         config: {
           systemInstruction: memberChallengePrompt,
           temperature: 0.7,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 1024,
         },
       });
 
