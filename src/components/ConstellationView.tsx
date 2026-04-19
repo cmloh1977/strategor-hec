@@ -590,8 +590,8 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                       transform: `translate(-50%, -50%) scale(${isSelected ? 1.15 : isMeDragging ? 1.2 : 1})`,
                     }}
                     onClick={() => {
-                      if (adjusting && isMe) return; // don't deselect while adjusting
-                      if (allRevealed) setSelectedMember(p.shareCode === selectedMember ? null : p.shareCode);
+                      if (adjusting && isMe) return;
+                      if (allRevealed) setSelectedMember(p.shareCode);
                     }}
                     {...(canDrag ? dragHandlers : {})}
                   >
@@ -634,7 +634,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
         </div>
 
         {/* ── Challenge Panel (right side) ── */}
-        {allRevealed && selectedMember && selectedPlacement && (
+        {allRevealed && selectedMember && selectedPlacement ? (
           <div className="w-[340px] flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col">
             {/* Header */}
             <div className="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-t-2xl">
@@ -791,7 +791,13 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               )}
             </div>
           </div>
-        )}
+        ) : allRevealed ? (
+          <div className="w-[340px] flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center p-8 text-center">
+            <MessageCircle className="h-10 w-10 text-slate-200 mb-3" />
+            <h4 className="text-sm font-semibold text-slate-500 mb-1">Challenge a Team Member</h4>
+            <p className="text-xs text-slate-400 leading-relaxed">Click any bubble on the grid to open their challenge thread and start the strategic discussion.</p>
+          </div>
+        ) : null}
 
         {/* Justification panel (blind phase, for self) */}
         {!allRevealed && (
