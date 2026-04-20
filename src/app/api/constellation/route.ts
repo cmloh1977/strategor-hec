@@ -6,80 +6,57 @@ const ai = new GoogleGenAI({});
 
 // ── Level 2: Pattern Recognition Prompt ──
 const PATTERN_PROMPT = `You are a senior strategy consultant analyzing a GROUP of business divisions within Toyota Tsusho Corporation (TTC).
-You have access to each team member's complete strategic analysis data AND their coaching conversation history.
+You have access to each team member's complete strategic analysis data AND their deep coaching conversation history.
 
-Your task: Identify cross-divisional PATTERNS — shared challenges, common strengths, synergy opportunities, and organizational themes.
+Your task: Identify cross-divisional PATTERNS that the team cannot see individually. Look for:
+1. "Exploit" Opportunities: Shared vulnerabilities, redundant resources, common problems to solve internally.
+2. "Explore" Opportunities: Hidden synergies, complementary strengths, new combinations that could create new value.
+
+Look specifically at their CHAT HISTORY for things they debated, struggled with, or mentioned casually that connect across divisions.
 
 Return ONLY valid JSON (no markdown fences). Structure:
 
 {
-  "commonThreats": [
-    { "theme": "<short title>", "description": "<2 sentences>", "affectedDivisions": ["<division names>"], "severity": "<high|medium|low>" }
+  "teamNarrative": "<3-4 sentence strategic narrative about the team's collective strategic position, focusing on the tension between their shared risks and potential synergies.>",
+  "exploitInsights": [
+    { "title": "<short problem/vulnerability name>", "description": "<2 sentences explaining the shared vulnerability found across members>", "divisions": ["<divisions affected>"] }
   ],
-  "commonStrengths": [
-    { "theme": "<short title>", "description": "<2 sentences>", "divisions": ["<divisions>"] }
-  ],
-  "synergies": [
-    { "title": "<opportunity name>", "description": "<2 sentences explaining how divisions could collaborate>", "divisions": ["<divisions>"] }
-  ],
-  "vrioGaps": [
-    { "dimension": "<V|R|I|O>", "observation": "<what the team-wide pattern shows>", "divisions": ["<divisions affected>"] }
-  ],
-  "forcesHeatmap": {
-    "<division1>": { "newEntrants": <1-10>, "suppliers": <1-10>, "rivalry": <1-10>, "buyers": <1-10>, "substitutes": <1-10> },
-    "<division2>": { ... }
-  },
-  "industryInsight": "<2-3 sentence summary of what the combined 5 Forces picture tells us about TTC's competitive landscape>",
-  "teamNarrative": "<3-4 sentence strategic narrative about the team's collective strategic position, key patterns, and biggest shared opportunity>"
+  "exploreInsights": [
+    { "title": "<short synergy/opportunity name>", "description": "<2 sentences explaining how members could combine strengths or unlock new value>", "divisions": ["<divisions affected>"] }
+  ]
 }
 
-Be rigorous. Look for REAL patterns, not forced connections. If only 1 out of 5 divisions shares a trait, that's not a pattern.`;
+Be rigorous. Look for REAL patterns, especially surprising ones found in their chat conversations, not forced connections.`;
 
-// ── Level 3: Dimension Mapping Prompt ──
+// ── Level 3: Project Theme Forge Prompt ──
 const DIMENSION_PROMPT = `You are a senior strategy consultant at Toyota Tsusho Corporation (TTC).
-You are helping a GALP team map their cross-divisional patterns to TTC's Mid-Term Business Plan "4 Higher Dimensions":
+You are helping a GALP team map a specific strategic tension/dilemma to TTC's Mid-Term Business Plan "4 Higher Dimensions":
 
-① GROWTH INVESTMENT — Elevate unique competitiveness + synergies across 3 value domains:
-   - Core Value (mobility value chain, automotive, electronics, logistics)
-   - Nature Value (renewable energy, carbon neutrality, wind/solar, storage)
-   - Social Value (circular economy, recycling, healthcare, Africa/India expansion)
-   Target: ¥450B+ NPAT, ¥1.2T investment over 3 years
-
+① GROWTH INVESTMENT — Elevate unique competitiveness + synergies across value domains (Core, Nature, Social)
 ② CAPITAL POLICIES — Optimize capital allocation, improve ROIC, shareholder returns
-   Target: ROE 15%+, 40% payout ratio
-
 ③ HUMAN CAPITAL & ORGANIZATION — Build people, culture, cross-functional collaboration, engagement
-   Target: Improve engagement scores
-
 ④ SUSTAINABILITY MANAGEMENT — ESG integration, circular economy leadership, carbon neutrality
-   Target: Improve ESG ratings
 
-Given the team's cross-divisional patterns and individual analyses, map each pattern to the relevant dimension(s) and suggest a Group Action Learning Project.
+The team has identified a key strategic tension (an insight from their portfolio).
+Your task: Map this tension to the 4 Higher Dimensions and generate concrete GALP Action Learning Project seeds that address it.
 
 Return ONLY valid JSON:
 
 {
-  "dimensionMapping": [
+  "tensionMapped": {
+    "dimensionsImpacted": ["①", "②", "③", "④"],
+    "rationale": "<2-3 sentences explaining why this specific tension impacts these dimensions>"
+  },
+  "projectSeeds": [
     {
-      "pattern": "<the cross-divisional pattern>",
-      "dimensions": ["①", "②", "③", "④"],
-      "valueDomain": "<Core|Nature|Social|Cross-domain>",
-      "rationale": "<2 sentences on why this maps here>"
+      "title": "<compelling project title address this tension>",
+      "type": "<Exploration|Exploitation>",
+      "hypothesis": "<If we do X across our divisions, we can achieve Y>",
+      "higherDimensionLeap": "<how this project goes beyond basic optimization to true TTC transformation>"
     }
   ],
-  "suggestedProject": {
-    "title": "<compelling project title>",
-    "dimensions": ["①", "③"],
-    "valueDomain": "<which value domain>",
-    "challenge": "<the shared challenge this addresses>",
-    "hypothesis": "<If we do X, we can achieve Y>",
-    "higherDimensionLeap": "<how this goes beyond optimization to transformation>",
-    "divisionsInvolved": ["<list>"],
-    "keyMetrics": ["<ROIC target>", "<other KPIs>"],
-    "first90Days": ["<action 1>", "<action 2>", "<action 3>"]
-  },
   "coachingQuestions": [
-    "<provocative question to push the team's thinking further>"
+    "<provocative question to push the team's thinking further regarding this project>"
   ]
 }`;
 
@@ -195,13 +172,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Need at least 2 team cards" }, { status: 400 });
     }
 
-    // Fetch chat history for all members (via admin SDK)
+    // Fetch chat history for all members in parallel (via admin SDK)
     const chatHistories: Record<string, any> = {};
-    for (const card of cards) {
-      if (card.ownerUID) {
-        chatHistories[card.ownerUID] = await fetchChatHistory(card.ownerUID);
-      }
-    }
+    const CHAT_FETCH_TIMEOUT = 5000; // 5s timeout per member
+    
+    const chatPromises = cards
+      .filter((card: any) => card.ownerUID)
+      .map(async (card: any) => {
+        try {
+          const timeoutPromise = new Promise<Record<string, any>>((_, reject) => 
+            setTimeout(() => reject(new Error('timeout')), CHAT_FETCH_TIMEOUT)
+          );
+          const fetchPromise = fetchChatHistory(card.ownerUID);
+          const result = await Promise.race([fetchPromise, timeoutPromise]);
+          chatHistories[card.ownerUID] = result;
+        } catch (e) {
+          // Silently skip — chat history is optional enrichment
+          console.warn(`Skipped chat history for ${card.ownerUID}: ${(e as Error).message}`);
+        }
+      });
+    
+    await Promise.allSettled(chatPromises);
 
     // Build combined analysis text
     const allMembersText = cards.map((card: any) => 
@@ -397,9 +388,13 @@ IMPORTANT: You know every team member's full analysis AND coaching journey. Use 
     }
 
     // Structured analysis (patterns or dimensions)
+    const userText = action === 'dimensions' && body.tension 
+      ? `Selected Strategic Tension for Project:\n${body.tension}\n\nTeam Data Context:\n${teamSummary}`
+      : teamSummary;
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ role: 'user', parts: [{ text: teamSummary }] }],
+      contents: [{ role: 'user', parts: [{ text: userText }] }],
       config: {
         systemInstruction: systemPrompt,
         temperature: 0.3,

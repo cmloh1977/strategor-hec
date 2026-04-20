@@ -28,19 +28,33 @@ export interface ProjectCanvas {
 }
 
 export interface PatternData {
-  commonThreats: { theme: string; description: string; affectedDivisions: string[]; severity: string }[];
-  commonStrengths: { theme: string; description: string; divisions: string[] }[];
-  synergies: { title: string; description: string; divisions: string[] }[];
-  vrioGaps: { dimension: string; observation: string; divisions: string[] }[];
-  forcesHeatmap: Record<string, Record<string, number>>;
-  industryInsight: string;
   teamNarrative: string;
+  exploitInsights: { title: string; description: string; divisions: string[] }[];
+  exploreInsights: { title: string; description: string; divisions: string[] }[];
+  // Legacy fields (backward compat with cached data)
+  commonThreats?: { theme: string; description: string; affectedDivisions: string[]; severity: string }[];
+  commonStrengths?: { theme: string; description: string; divisions: string[] }[];
+  synergies?: { title: string; description: string; divisions: string[] }[];
+  vrioGaps?: { dimension: string; observation: string; divisions: string[] }[];
+  forcesHeatmap?: Record<string, Record<string, number>>;
+  industryInsight?: string;
 }
 
 export interface DimensionData {
-  dimensionMapping: { pattern: string; dimensions: string[]; valueDomain: string; rationale: string }[];
-  suggestedProject: ProjectCanvas & { coachingQuestions?: string[] };
+  tensionMapped: {
+    dimensionsImpacted: string[];
+    rationale: string;
+  };
+  projectSeeds: {
+    title: string;
+    type: string;
+    hypothesis: string;
+    higherDimensionLeap: string;
+  }[];
   coachingQuestions: string[];
+  // Legacy fields (backward compat with cached data)
+  dimensionMapping?: { pattern: string; dimensions: string[]; valueDomain: string; rationale: string }[];
+  suggestedProject?: ProjectCanvas & { coachingQuestions?: string[] };
 }
 
 // ── V8: Placement / Challenge Types ──
@@ -106,6 +120,7 @@ interface TeamContextType {
   // Shared state persistence
   savePatterns: (data: PatternData) => Promise<void>;
   saveDimensions: (data: DimensionData) => Promise<void>;
+  clearDimensions: () => Promise<void>;
   saveProjectCanvas: (canvas: ProjectCanvas) => Promise<void>;
   addChatMessage: (message: ChatMessage) => Promise<void>;
 
@@ -316,6 +331,18 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
   }, [teamCode]);
 
+  const clearDimensions = useCallback(async () => {
+    if (!teamCode) return;
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        dimensions: null,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Clear dimensions error:", e);
+    }
+  }, [teamCode]);
+
   const saveProjectCanvas = useCallback(async (canvas: ProjectCanvas) => {
     if (!teamCode) return;
     try {
@@ -508,6 +535,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         leaveTeam,
         savePatterns,
         saveDimensions,
+        clearDimensions,
         saveProjectCanvas,
         addChatMessage,
         savePlacement,
