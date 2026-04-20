@@ -14,107 +14,55 @@ Each team member has completed a strategic analysis of their own business or div
 
 You have access to each team member's complete strategic analysis data AND their coaching conversation history.
 
-Your task: Identify cross-divisional PATTERNS — shared challenges, common strengths, synergy opportunities, and organizational themes.
+Your task: Identify cross-divisional PATTERNS that the team cannot see individually. Look for:
+1. "Exploit" Opportunities: Shared vulnerabilities, redundant resources, common problems to solve internally.
+2. "Explore" Opportunities: Hidden synergies, complementary strengths, new combinations that could create new value.
+
+Look specifically at their CHAT HISTORY for things they debated, struggled with, or mentioned casually that connect across divisions.
 
 Return ONLY valid JSON (no markdown fences). Structure:
 
 {
-  "commonThreats": [
-    { "theme": "<short title>", "description": "<2 sentences>", "affectedDivisions": ["<division names>"], "severity": "<high|medium|low>" }
+  "teamNarrative": "<3-4 sentence strategic narrative about the team's collective strategic position, focusing on the tension between their shared risks and potential synergies.>",
+  "exploitInsights": [
+    { "title": "<short problem/vulnerability name>", "description": "<2 sentences explaining the shared vulnerability found across members>", "divisions": ["<divisions affected>"] }
   ],
-  "commonStrengths": [
-    { "theme": "<short title>", "description": "<2 sentences>", "divisions": ["<divisions>"] }
-  ],
-  "synergies": [
-    { "title": "<opportunity name>", "description": "<2 sentences explaining how divisions could collaborate>", "divisions": ["<divisions>"] }
-  ],
-  "vrioGaps": [
-    { "dimension": "<V|R|I|O>", "observation": "<what the team-wide pattern shows>", "divisions": ["<divisions affected>"] }
-  ],
-  "forcesHeatmap": {
-    "<division1>": { "newEntrants": <1-10>, "suppliers": <1-10>, "rivalry": <1-10>, "buyers": <1-10>, "substitutes": <1-10> },
-    "<division2>": { ... }
-  },
-  "industryInsight": "<2-3 sentence summary of what the combined 5 Forces picture tells us about the competitive landscape across these businesses>",
-  "teamNarrative": "<3-4 sentence strategic narrative about the team's collective strategic position, key patterns, and biggest shared opportunity>"
+  "exploreInsights": [
+    { "title": "<short synergy/opportunity name>", "description": "<2 sentences explaining how members could combine strengths or unlock new value>", "divisions": ["<divisions affected>"] }
+  ]
 }
 
-Be rigorous. Look for REAL patterns, not forced connections. If only 1 out of 5 divisions shares a trait, that's not a pattern.`;
+Be rigorous. Look for REAL patterns, especially surprising ones found in their chat conversations, not forced connections.`;
 
-// ── Level 3: McKinsey/GE Matrix Synthesis Prompt (HEC / Strategor) ──
-const DIMENSION_PROMPT = `You are a senior strategy consultant coaching a team through corporate-level strategic synthesis using the McKinsey/GE Matrix (also known as the GE-McKinsey Nine-Cell Matrix), as taught in the Strategor framework (Chapter 7).
+// ── Level 3: Strategic Project Forge Prompt (HEC / Strategor) ──
+const DIMENSION_PROMPT = `You are a senior strategy consultant coaching a team through corporate-level strategic synthesis using the McKinsey/GE Matrix framework.
 
-The McKinsey Matrix evaluates each business on TWO axes:
+The McKinsey/GE Matrix evaluates businesses on TWO axes:
+- INDUSTRY ATTRACTIVENESS (from 5 Forces + external environment)
+- COMPETITIVE STRENGTH (from VRIO + Business Model)
 
-INDUSTRY ATTRACTIVENESS (derived from their 5 Forces analysis + external environment):
-- Market size and growth rate
-- Competitive intensity (from Porter's 5 Forces)
-- Technological change and disruption risk
-- Regulatory environment
-- Profitability potential
-Rate each division: HIGH / MEDIUM / LOW
-
-COMPETITIVE STRENGTH (derived from their VRIO analysis + Business Model):
-- Market share and brand strength
-- Resource uniqueness (VRIO dimensions met)
-- Business model differentiation
-- Cost position and operational capabilities
-- Innovation and adaptability
-Rate each division: HIGH / MEDIUM / LOW
-
-The 9-cell matrix produces strategic prescriptions:
-┌────────────────────┬─────────────────────┬─────────────────────┐
-│ HIGH Attract.      │ MEDIUM Attract.     │ LOW Attract.        │
-├────────────────────┼─────────────────────┼─────────────────────┤
-│ STRONG: Protect    │ STRONG: Maintain &  │ STRONG: Harvest     │
-│ position, invest   │ grow selectively    │ for profitability   │
-├────────────────────┼─────────────────────┼─────────────────────┤
-│ MEDIUM: Invest to  │ MEDIUM: Manage      │ MEDIUM: Withdraw    │
-│ improve position   │ selectively         │ selectively         │
-├────────────────────┼─────────────────────┼─────────────────────┤
-│ WEAK: Double down  │ WEAK: Divest        │ WEAK: Divest or     │
-│ or give up         │ selectively         │ liquidate           │
-└────────────────────┴─────────────────────┴─────────────────────┘
-
-Given the team's cross-divisional patterns and individual analyses, plot each division on the McKinsey Matrix and suggest a strategic portfolio action plan.
+The team has identified a key strategic tension (an insight from their portfolio analysis).
+Your task: Map this tension to strategic implications and generate concrete collaborative project seeds.
 
 Return ONLY valid JSON:
 
 {
-  "dimensionMapping": [
-    {
-      "pattern": "<the cross-divisional pattern>",
-      "dimensions": ["<attractiveness level>", "<competitive strength level>"],
-      "valueDomain": "<strategic prescription from matrix>",
-      "rationale": "<2 sentences on why this maps here>"
-    }
-  ],
-  "matrixPlacement": [
-    {
-      "division": "<division name>",
-      "industryAttractiveness": "<HIGH|MEDIUM|LOW>",
-      "competitiveStrength": "<HIGH|MEDIUM|LOW>",
-      "attractivenessFactors": "<key factors driving the rating>",
-      "strengthFactors": "<key factors driving the rating>",
-      "prescription": "<strategic prescription from the matrix cell>"
-    }
-  ],
-  "suggestedProject": {
-    "title": "<compelling project title>",
-    "dimensions": ["<which matrix cells are targeted>"],
-    "valueDomain": "<portfolio-level strategic theme>",
-    "challenge": "<the shared challenge this addresses>",
-    "hypothesis": "<If we do X, we can achieve Y>",
-    "higherDimensionLeap": "<how this goes beyond optimization to create cross-divisional synergies>",
-    "divisionsInvolved": ["<list>"],
-    "keyMetrics": ["<market share target>", "<profitability KPIs>", "<other measurables>"],
-    "first90Days": ["<action 1>", "<action 2>", "<action 3>"]
+  "tensionMapped": {
+    "dimensionsImpacted": ["Industry Attractiveness", "Competitive Strength"],
+    "rationale": "<2-3 sentences explaining why this tension impacts portfolio positioning>"
   },
+  "projectSeeds": [
+    {
+      "title": "<compelling project title addressing this tension>",
+      "type": "<Exploration|Exploitation>",
+      "hypothesis": "<If we do X across our divisions, we can achieve Y>",
+      "higherDimensionLeap": "<how this project goes beyond basic optimization to true strategic transformation>"
+    }
+  ],
   "coachingQuestions": [
-    "<provocative question to push the team's thinking further>"
+    "<provocative question to push the team's thinking further regarding this project>"
   ]
 }`;
-
 
 // ── Helper: Build analysis text for one member ──
 function formatMemberAnalysis(card: any, chatHistory?: any): string {
@@ -228,13 +176,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Need at least 2 team cards" }, { status: 400 });
     }
 
-    // Fetch chat history for all members (via admin SDK)
+    // Fetch chat history for all members in parallel (via admin SDK)
     const chatHistories: Record<string, any> = {};
-    for (const card of cards) {
-      if (card.ownerUID) {
-        chatHistories[card.ownerUID] = await fetchChatHistory(card.ownerUID);
-      }
-    }
+    const CHAT_FETCH_TIMEOUT = 5000; // 5s timeout per member
+    
+    const chatPromises = cards
+      .filter((card: any) => card.ownerUID)
+      .map(async (card: any) => {
+        try {
+          const timeoutPromise = new Promise<Record<string, any>>((_, reject) => 
+            setTimeout(() => reject(new Error('timeout')), CHAT_FETCH_TIMEOUT)
+          );
+          const fetchPromise = fetchChatHistory(card.ownerUID);
+          const result = await Promise.race([fetchPromise, timeoutPromise]);
+          chatHistories[card.ownerUID] = result;
+        } catch (e) {
+          // Silently skip — chat history is optional enrichment
+          console.warn(`Skipped chat history for ${card.ownerUID}: ${(e as Error).message}`);
+        }
+      });
+    
+    await Promise.allSettled(chatPromises);
 
     // Build combined analysis text
     const allMembersText = cards.map((card: any) => 
@@ -317,7 +279,7 @@ Total response: 100-180 words maximum. Questions only, no answers.`;
         config: {
           systemInstruction: memberChallengePrompt,
           temperature: 0.7,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 1024,
         },
       });
 
@@ -378,39 +340,31 @@ Format in markdown with ### headers. Be specific — reference member names and 
       const { message, chatHistory: convoHistory } = body;
       
       const constellationChatPrompt = `You are the TEAM Thinking Partner for a strategy team.
-You have access to ALL team members' individual analyses AND their coaching conversations.
-You're now facilitating a GROUP discussion to identify cross-divisional patterns, apply the McKinsey/GE Matrix, and build toward a strategic action plan.
-
-The Strategor Framework Context:
-- Each member analyzed their business using: Business Model (Odyssey 3.14), Porter's 5 Forces, VRIO, and SWOT
-- At Level 3, the team maps their businesses onto the McKinsey/GE Matrix:
-  • Y-axis: Industry Attractiveness (from 5 Forces — competitive intensity, growth, disruption risk)
-  • X-axis: Competitive Strength (from VRIO + Business Model — unique resources, differentiation, positioning)
-  • Each cell prescribes a strategic action: Protect, Invest, Maintain, Harvest, Withdraw, Divest
+You have access to ALL team members' individual strategic analyses AND their coaching conversations.
+You're now facilitating a GROUP discussion to identify cross-divisional patterns and build toward a collaborative strategic project.
 
 Your role:
 - Be Socratic: Ask questions, don't give answers directly
-- Challenge the team to think at a PORTFOLIO level — synergies, resource reallocation, parenting advantage
-- Help them use the McKinsey Matrix to identify which businesses deserve investment vs. harvesting
-- Push them toward a concrete strategic action plan based on their matrix positioning
+- Challenge the team to think at a higher strategic level — transformation, not just optimization
+- Help them connect their individual challenges to shared strategic priorities
+- Push them toward a concrete collaborative project
 - Reference specific findings from individual members' analyses
-- When they propose ideas, challenge: "Does this create genuine synergies across businesses, or is each division better off independently?"
-- Use the Strategor vocabulary: competitive advantage, willingness to pay, experience curve, parenting advantage, value creation
+- When they propose ideas, challenge: "Does this merely optimize or truly transform?"
 
 ## CRITICAL: Honest Challenge Protocol
 You have FULL ACCESS to every member's analysis data AND their coaching conversations. Use this to:
 
 1. **Call out uniformly rosy analyses.** If multiple members claim sustained competitive advantage or have no significant weaknesses, say so directly: "I notice that [N] out of [Total] of you rated your competitive position very highly. Looking at the actual data, I want to challenge that — [specific example of where the analysis seems overly optimistic]."
 
-2. **Surface hidden shared vulnerabilities.** Look for weaknesses that appear across multiple businesses but may have been downplayed individually. "Three of you mentioned dependency on [X] in passing, but none of you flagged it as a major risk. Collectively, this looks like a systemic vulnerability."
+2. **Surface hidden shared vulnerabilities.** Look for weaknesses that appear across multiple divisions but may have been downplayed individually. "Three of you mentioned dependency on [X] in passing, but none of you flagged it as a major risk. Collectively, this looks like a systemic vulnerability for TTC."
 
-3. **Connect weaknesses to project ideas.** The best strategic action plans come from honest shared pain, NOT from strengths. Push the team: "Instead of building on what's already working, what if your plan tackled the ONE thing that keeps ALL of you up at night?"
+3. **Connect weaknesses to project ideas.** The best Group Action Learning Projects come from honest shared pain, NOT from strengths. Push the team: "Instead of building on what's already working, what if your project tackled the ONE thing that keeps ALL of you up at night?"
 
-4. **Challenge "safe" project proposals.** If the team proposes something incremental or obvious, push back: "This sounds like something your businesses could each do independently. What would a plan look like that REQUIRES cross-business collaboration and addresses a vulnerability none of you can solve alone?"
+4. **Challenge "safe" project proposals.** If the team proposes something incremental or obvious, push back: "This sounds like something your divisions could each do independently. What would a project look like that REQUIRES cross-divisional collaboration and addresses a vulnerability none of you can solve alone?"
 
 5. **Reference coaching conversation insights.** You can see what each member discussed with their individual Thinking Partner. Use this: "During your individual coaching, [Name], you mentioned struggling with [X]. Did anyone else face something similar? This could be the seed of something."
 
-IMPORTANT: You know every team member's full analysis AND coaching journey. Use specific examples from their work to provoke deeper, more honest thinking. The goal is NOT to make everyone feel good — it's to find the real, shared strategic challenges that deserve a transformative plan.`;
+IMPORTANT: You know every team member's full analysis AND coaching journey. Use specific examples from their work to provoke deeper, more honest thinking. The goal is NOT to make everyone feel good — it's to find the real, shared strategic challenges that deserve a transformative project.`;
 
       const messages = [
         { role: 'user' as const, parts: [{ text: `TEAM DATA FOR CONTEXT:\n${teamSummary}` }] },
@@ -432,9 +386,13 @@ IMPORTANT: You know every team member's full analysis AND coaching journey. Use 
     }
 
     // Structured analysis (patterns or dimensions)
+    const userText = action === 'dimensions' && body.tension 
+      ? `Selected Strategic Tension for Project:\n${body.tension}\n\nTeam Data Context:\n${teamSummary}`
+      : teamSummary;
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ role: 'user', parts: [{ text: teamSummary }] }],
+      contents: [{ role: 'user', parts: [{ text: userText }] }],
       config: {
         systemInstruction: systemPrompt,
         temperature: 0.3,

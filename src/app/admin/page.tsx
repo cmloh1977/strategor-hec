@@ -455,7 +455,7 @@ export default function AdminDashboard() {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">HEC Admin Dashboard</h1>
-              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.2-hec</span>
+              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.3-hec</span>
             </div>
             <p className="text-sm text-slate-500 ml-8">Monitor participant progress and manage accounts.</p>
           </div>
@@ -637,7 +637,7 @@ export default function AdminDashboard() {
                       className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
                   </div>
                   <button type="submit" disabled={creating}
-                    className="px-6 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap">
+                    className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap">
                     {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create User"}
                   </button>
                 </div>
@@ -809,7 +809,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-slate-500 mb-4">Delete <strong>{deleteTarget.email}</strong>? This cannot be undone.</p>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Cancel</button>
-                <button onClick={() => handleDelete(deleteTarget)} disabled={deleting} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+                <button onClick={() => handleDelete(deleteTarget)} disabled={deleting} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-red-700 disabled:opacity-50">
                   {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Yes, Delete"}
                 </button>
               </div>

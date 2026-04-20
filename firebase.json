@@ -1,7 +1,7 @@
 {
   "firestore": [
     {
-      "database": "strategor-galp",
+      "database": "strategor-hec",
       "rules": "firestore.rules"
     }
   ],

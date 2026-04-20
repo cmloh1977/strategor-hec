@@ -39,7 +39,7 @@ export default function Home() {
   if (loading || user) {
     return (
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
+        <Loader2 className="h-10 w-10 animate-spin text-red-600" />
       </div>
     );
   }
@@ -49,23 +49,23 @@ export default function Home() {
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200/50">
         
         {/* Header Decorator */}
-        <div className="h-2 w-full bg-gradient-to-r from-indigo-600 to-indigo-500"></div>
+        <div className="h-2 w-full bg-gradient-to-r from-red-600 to-red-500"></div>
         
         <div className="px-8 py-10">
           <div className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 ring-8 ring-white">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-600 ring-8 ring-white">
               <Shield className="h-8 w-8" />
             </div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">HEC Strategy Coach</h1>
-              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.2-hec</span>
+              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.3-hec</span>
             </div>
             <p className="mt-2 text-sm text-slate-500">Master Strategic Analysis.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
             {error && (
-              <div className="rounded-md bg-red-50 p-4 text-sm text-indigo-600">
+              <div className="rounded-md bg-red-50 p-4 text-sm text-red-600">
                 {error}
               </div>
             )}
@@ -78,8 +78,8 @@ export default function Home() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                  placeholder="your.name@email.com"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                  placeholder="your.name@toyota-tsusho.com"
                 />
               </div>
               <div>
@@ -89,7 +89,7 @@ export default function Home() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-all placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
                   placeholder="••••••••"
                 />
               </div>
@@ -98,7 +98,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm flex-1 font-semibold text-white shadow-md transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm flex-1 font-semibold text-white shadow-md transition-all hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isLoggingIn ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
