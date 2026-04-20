@@ -8,7 +8,7 @@ import { useDragOnGrid } from "@/lib/useDragOnGrid";
 import {
   Users, BarChart3, Sparkles, Map, Target, Swords, Shield, Zap,
   Loader2, Send, ArrowLeft, ChevronRight, FileDown, Star,
-  TrendingUp, AlertTriangle, Lightbulb, Link2, MessageCircle, Bot, Move
+  TrendingUp, AlertTriangle, Lightbulb, Link2, MessageCircle, Bot, Move, Rocket
 } from "lucide-react";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
@@ -19,12 +19,13 @@ interface ConstellationViewProps {
 }
 
 export default function ConstellationView({ onBack }: ConstellationViewProps) {
-  const { team, savePatterns, saveDimensions, addChatMessage } = useTeam();
+  const { team, savePatterns, saveDimensions, clearDimensions, addChatMessage } = useTeam();
   const [activeLevel, setActiveLevel] = useState<1 | 2 | 3>(1);
   const [loadingPatterns, setLoadingPatterns] = useState(false);
   const [loadingDimensions, setLoadingDimensions] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [selectedTension, setSelectedTension] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Read from team shared state (persisted in Firestore)
@@ -37,10 +38,12 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // ── Fetch patterns (Level 2) — only if not cached ──
+  // ── Fetch patterns (Level 2) ──
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const fetchPatterns = async () => {
-    if (patterns || loadingPatterns) return;
+    if (loadingPatterns) return;
     setLoadingPatterns(true);
+    setFetchError(null);
     try {
       const res = await fetch("/api/constellation", {
         method: "POST",
@@ -50,22 +53,25 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
       const data = await res.json();
       if (!data.error) {
         await savePatterns(data); // persist to team doc
+      } else {
+        setFetchError(data.error);
       }
     } catch (e) {
       console.error(e);
+      setFetchError("Failed to fetch patterns");
     }
     setLoadingPatterns(false);
   };
 
   // ── Fetch dimensions (Level 3) — only if not cached ──
   const fetchDimensions = async () => {
-    if (dimensions || loadingDimensions) return;
+    if (loadingDimensions) return;
     setLoadingDimensions(true);
     try {
       const res = await fetch("/api/constellation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cards, action: "dimensions" }),
+        body: JSON.stringify({ cards, action: "dimensions", tension: selectedTension }),
       });
       const data = await res.json();
       if (!data.error) {
@@ -77,10 +83,12 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
     setLoadingDimensions(false);
   };
 
-  // Auto-fetch when switching levels
+  // Auto-fetch when switching levels (refetch if data is stale/missing new fields)
+  const isPatternStale = patterns && !patterns.exploitInsights;
+  const needsPatternFetch = !patterns || isPatternStale;
   useEffect(() => {
-    if (activeLevel === 2) fetchPatterns();
-    if (activeLevel === 3) fetchDimensions();
+    if (activeLevel === 2 && needsPatternFetch && !loadingPatterns && !fetchError) fetchPatterns();
+    if (activeLevel === 3 && !dimensions && !loadingDimensions) fetchDimensions();
   }, [activeLevel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Send chat message (persisted to shared team doc) ──
@@ -170,7 +178,20 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
         {/* Main Panel */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeLevel === 1 && <CollaborativeGrid cards={cards} />}
-          {activeLevel === 2 && (loadingPatterns ? <LoadingSkeleton label="Analyzing cross-divisional patterns..." /> : patterns ? <Level2Patterns data={patterns} cards={cards} /> : null)}
+          {activeLevel === 2 && (
+            loadingPatterns 
+              ? <LoadingSkeleton label="Analyzing cross-divisional patterns..." />
+              : fetchError
+                ? <div className="flex flex-col items-center justify-center py-20">
+                    <AlertTriangle className="h-10 w-10 text-amber-500 mb-4" />
+                    <p className="text-sm font-medium text-slate-700">Pattern analysis failed</p>
+                    <p className="text-xs text-slate-400 mt-1 mb-4">{fetchError}</p>
+                    <button onClick={() => { setFetchError(null); fetchPatterns(); }} className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors">Retry</button>
+                  </div>
+                : patterns && patterns.exploitInsights
+                  ? <Level2Patterns data={patterns} cards={cards} onSelectTension={(t) => { setSelectedTension(t); clearDimensions(); setActiveLevel(3); }} />
+                  : null
+          )}
           {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to TTC's 4 Higher Dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
         </div>
 
@@ -868,142 +889,178 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
 }
 
 // ═══════════════════════════════════════
-// LEVEL 2: Pattern Recognition
+// LEVEL 2: Pattern Recognition (Chat History + VRIO Radar)
 // ═══════════════════════════════════════
 
-function Level2Patterns({ data, cards }: { data: PatternData; cards: HealthCard[] }) {
+function VRIORadar({ cards }: { cards: any[] }) {
+  const size = 300;
+  const center = size / 2;
+  const radius = 100;
+  
+  // 5 levels of grid
+  const grids = [1, 2, 3, 4, 5].map(level => {
+    const r = (level / 5) * radius;
+    return `${center},${center - r} ${center + r},${center} ${center},${center + r} ${center - r},${center}`;
+  });
+
+  const getPoints = (v: number, r: number, i: number, o: number) => {
+    const pV = `${center},${center - (v/5)*radius}`;
+    const pR = `${center + (r/5)*radius},${center}`;
+    const pI = `${center},${center + (i/5)*radius}`;
+    const pO = `${center - (o/5)*radius},${center}`;
+    return `${pV} ${pR} ${pI} ${pO}`;
+  };
+
+  const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-bold text-slate-800 mb-1">Cross-Divisional Patterns</h3>
-        <p className="text-sm text-slate-500">AI-identified patterns across {cards.length} divisions</p>
+    <div className="flex flex-col items-center justify-center relative w-[300px] h-[300px] mx-auto">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {/* Background Grid */}
+        {grids.map((points, idx) => (
+          <polygon key={idx} points={points} fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray={idx < 4 ? "4 4" : "none"} />
+        ))}
+        {/* Axis Lines */}
+        <line x1={center} y1={center - radius} x2={center} y2={center + radius} stroke="#cbd5e1" strokeWidth="1" />
+        <line x1={center - radius} y1={center} x2={center + radius} y2={center} stroke="#cbd5e1" strokeWidth="1" />
+        
+        {/* Member Polygons */}
+        {cards?.map((card, idx) => {
+          const vrio = card.aiAnalysis?.vrio || {};
+          const v = vrio.valuable?.strength || 1;
+          const r = vrio.rare?.strength || 1;
+          const i = vrio.inimitable?.strength || 1;
+          const o = vrio.organized?.strength || 1;
+          const points = getPoints(v, r, i, o);
+          return (
+            <polygon 
+              key={idx} 
+              points={points} 
+              fill={colors[idx % colors.length]} 
+              fillOpacity="0.15" 
+              stroke={colors[idx % colors.length]} 
+              strokeWidth="2" 
+              className="transition-all duration-300 hover:fill-opacity-50"
+            />
+          );
+        })}
+      </svg>
+      {/* Labels */}
+      <span className="absolute top-[20px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valuable</span>
+      <span className="absolute right-[10px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rare</span>
+      <span className="absolute bottom-[20px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Inimitable</span>
+      <span className="absolute left-[10px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Organized</span>
+    </div>
+  );
+}
+
+function VRIOLegend({ cards }: { cards: any[] }) {
+  const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
+  return (
+    <div className="flex flex-wrap gap-3 justify-center mt-4">
+      {cards.map((card: any, idx: number) => (
+        <div key={idx} className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[idx % colors.length] }} />
+          <span className="text-[11px] text-slate-600 font-medium">{card.ownerName || card.businessName}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Level2Patterns({ data, cards, onSelectTension }: { data: PatternData; cards: HealthCard[]; onSelectTension: (tension: string) => void }) {
+  // We are expecting: teamNarrative, exploitInsights, exploreInsights
+  // For backward compatibility (or if data isn't ready), fallback gracefully
+  const exploit = data.exploitInsights || [];
+  const explore = data.exploreInsights || [];
+
+  return (
+    <div className="space-y-8 max-w-4xl mx-auto pb-20">
+      <div className="text-center">
+        <h3 className="text-2xl font-bold text-slate-800 mb-2">Pattern Discovery</h3>
+        <p className="text-slate-500">AI has analyzed {cards.length} divisions' health cards and chat histories to find hidden patterns.</p>
+      </div>
+
+      {/* VRIO Overlap Radar */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col items-center">
+        <h4 className="text-sm font-bold text-slate-800 mb-2">Team Capability Overlay (VRIO)</h4>
+        <p className="text-xs text-slate-400 mb-6 max-w-md text-center">Where does the team converge? Where do you diverge? Hover over the shapes to isolate divisions.</p>
+        <VRIORadar cards={cards} />
+        <VRIOLegend cards={cards} />
       </div>
 
       {/* Team Narrative */}
-      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-5 border border-indigo-100">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="h-4 w-4 text-indigo-500" />
-          <h4 className="text-sm font-bold text-indigo-800">Team Strategic Narrative</h4>
-        </div>
-        <p className="text-sm text-slate-700 leading-relaxed">{data.teamNarrative}</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {/* Common Threats */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h4 className="text-sm font-bold text-red-700 flex items-center gap-2 mb-3">
-            <AlertTriangle className="h-4 w-4" /> Shared Threats
-          </h4>
-          <div className="space-y-3">
-            {data.commonThreats?.map((t, i) => (
-              <div key={i} className="border-l-2 border-red-300 pl-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-800">{t.theme}</span>
-                  <span className={clsx("text-[9px] px-1.5 py-0.5 rounded-full font-bold",
-                    t.severity === "high" ? "bg-red-100 text-red-700" : t.severity === "medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                  )}>{t.severity}</span>
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1">{t.description}</p>
-                <p className="text-[9px] text-slate-400 mt-1">{t.affectedDivisions?.join(", ")}</p>
-              </div>
-            ))}
+      {data.teamNarrative && (
+        <div className="bg-gradient-to-r from-slate-800 to-indigo-900 rounded-2xl p-6 shadow-md text-white">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-5 w-5 text-indigo-300" />
+            <h4 className="text-sm font-bold text-indigo-100 uppercase tracking-wider">Strategic Narrative</h4>
           </div>
-        </div>
-
-        {/* Common Strengths */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h4 className="text-sm font-bold text-emerald-700 flex items-center gap-2 mb-3">
-            <TrendingUp className="h-4 w-4" /> Shared Strengths
-          </h4>
-          <div className="space-y-3">
-            {data.commonStrengths?.map((s, i) => (
-              <div key={i} className="border-l-2 border-emerald-300 pl-3">
-                <span className="text-xs font-bold text-slate-800">{s.theme}</span>
-                <p className="text-[11px] text-slate-600 mt-1">{s.description}</p>
-                <p className="text-[9px] text-slate-400 mt-1">{s.divisions?.join(", ")}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Synergy Opportunities */}
-      {data.synergies?.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h4 className="text-sm font-bold text-blue-700 flex items-center gap-2 mb-3">
-            <Link2 className="h-4 w-4" /> Synergy Opportunities
-          </h4>
-          <div className="grid grid-cols-2 gap-3">
-            {data.synergies.map((s, i) => (
-              <div key={i} className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                <span className="text-xs font-bold text-blue-800">{s.title}</span>
-                <p className="text-[11px] text-slate-600 mt-1">{s.description}</p>
-                <p className="text-[9px] text-blue-500 mt-1 font-medium">{s.divisions?.join(" × ")}</p>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm leading-relaxed text-indigo-50">{data.teamNarrative}</p>
         </div>
       )}
 
-      {/* 5 Forces Heatmap */}
-      {data.forcesHeatmap && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
-            <Swords className="h-4 w-4 text-red-500" /> 5 Forces Heatmap
-          </h4>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[10px]">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left py-2 pr-3 text-slate-500 font-medium">Division</th>
-                  <th className="text-center py-2 px-2 text-slate-500 font-medium">New Ent.</th>
-                  <th className="text-center py-2 px-2 text-slate-500 font-medium">Suppliers</th>
-                  <th className="text-center py-2 px-2 text-slate-500 font-medium">Rivalry</th>
-                  <th className="text-center py-2 px-2 text-slate-500 font-medium">Buyers</th>
-                  <th className="text-center py-2 px-2 text-slate-500 font-medium">Subst.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(data.forcesHeatmap).map(([div, forces]) => (
-                  <tr key={div} className="border-b border-slate-50">
-                    <td className="py-2 pr-3 font-semibold text-slate-700 truncate max-w-[120px]">{div}</td>
-                    {["newEntrants", "suppliers", "rivalry", "buyers", "substitutes"].map((f) => {
-                      const val = (forces as any)[f] || 0;
-                      const bg = val <= 3 ? "bg-emerald-100 text-emerald-700" : val <= 6 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700";
-                      return (
-                        <td key={f} className="text-center py-2 px-2">
-                          <span className={clsx("inline-block w-8 py-0.5 rounded font-bold", bg)}>{val}</span>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[10px] text-slate-500 mt-2 italic">{data.industryInsight}</p>
-        </div>
-      )}
-
-      {/* VRIO Gaps */}
-      {data.vrioGaps?.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h4 className="text-sm font-bold text-emerald-700 flex items-center gap-2 mb-3">
-            <Shield className="h-4 w-4" /> VRIO Gaps Across Team
-          </h4>
-          <div className="space-y-2">
-            {data.vrioGaps.map((g, i) => (
-              <div key={i} className="flex gap-3 items-start bg-emerald-50 rounded-xl p-3">
-                <span className="text-xs font-bold bg-emerald-200 text-emerald-800 rounded px-2 py-0.5">{g.dimension}</span>
-                <div>
-                  <p className="text-[11px] text-slate-700">{g.observation}</p>
-                  <p className="text-[9px] text-slate-400 mt-1">{g.divisions?.join(", ")}</p>
+      {/* Discoveries */}
+      <div>
+        <h4 className="text-lg font-bold text-slate-800 mb-4">Hidden Patterns from Coaching Chats</h4>
+        <div className="grid grid-cols-2 gap-6">
+          {/* Exploit */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-rose-100 rounded text-rose-600"><AlertTriangle className="h-4 w-4" /></div>
+              <h5 className="font-bold text-slate-800">"Exploit" Opportunities</h5>
+            </div>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Shared vulnerabilities & redundant resources</p>
+            {exploit.length > 0 ? exploit.map((inc: any, i: number) => (
+              <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-rose-300 transition-colors">
+                <span className="text-sm font-bold text-rose-700">{inc.title}</span>
+                <p className="text-xs text-slate-600 mt-2">{inc.description}</p>
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {inc.divisions?.map((d: string) => <span key={d} className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-medium">{d}</span>)}
                 </div>
               </div>
-            ))}
+            )) : <p className="text-xs text-slate-400 italic">No exploit patterns found.</p>}
+          </div>
+
+          {/* Explore */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-emerald-100 rounded text-emerald-600"><Rocket className="h-4 w-4" /></div>
+              <h5 className="font-bold text-slate-800">"Explore" Opportunities</h5>
+            </div>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Hidden synergies & combinations</p>
+            {explore.length > 0 ? explore.map((inc: any, i: number) => (
+              <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-emerald-300 transition-colors">
+                <span className="text-sm font-bold text-emerald-700">{inc.title}</span>
+                <p className="text-xs text-slate-600 mt-2">{inc.description}</p>
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {inc.divisions?.map((d: string) => <span key={d} className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-md font-medium">{d}</span>)}
+                </div>
+              </div>
+            )) : <p className="text-xs text-slate-400 italic">No explore patterns found.</p>}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Sense-Making Input */}
+      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 mt-8">
+        <h4 className="text-sm font-bold text-indigo-900 mb-2">What do you see?</h4>
+        <p className="text-xs text-indigo-700 mb-4">Which of these patterns is the most critical strategic tension for the portfolio? Discuss in the team chat and select one to map into a project.</p>
+        <div className="flex gap-4">
+          <button 
+            onClick={() => onSelectTension(exploit?.[0]?.title || "Exploit opportunity based on shared vulnerabilities")}
+            className="flex-1 py-3 px-4 bg-white border border-indigo-200 rounded-xl text-sm font-medium text-indigo-900 hover:bg-indigo-100 transition-colors shadow-sm"
+          >
+            Vote: Top Exploit Pattern
+          </button>
+          <button 
+            onClick={() => onSelectTension(explore?.[0]?.title || "Explore opportunity based on hidden synergies")}
+            className="flex-1 py-3 px-4 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+          >
+            Vote: Top Explore Pattern
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1021,111 +1078,56 @@ function Level3Strategy({ data }: { data: DimensionData }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-bold text-slate-800 mb-1">Strategic Synthesis — Higher Dimensions</h3>
-        <p className="text-sm text-slate-500">Mapping team patterns to TTC&apos;s Mid-Term Business Plan</p>
+    <div className="space-y-8 max-w-4xl mx-auto pb-20">
+      <div className="text-center">
+        <h3 className="text-2xl font-bold text-slate-800 mb-2">Project Theme Forge</h3>
+        <p className="text-slate-500">Mapping the selected tension to TTC&apos;s 4 Higher Dimensions to discover a GALP Action Learning Project.</p>
       </div>
 
-      {/* Dimension Mapping */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <h4 className="text-sm font-bold text-slate-800 mb-4">Pattern → Dimension Mapping</h4>
-        <div className="space-y-3">
-          {data.dimensionMapping?.map((m, i) => (
-            <div key={i} className="border border-slate-100 rounded-xl p-4">
-              <p className="text-xs font-medium text-slate-700 mb-2">{m.pattern}</p>
-              <div className="flex gap-2 flex-wrap mb-2">
-                {m.dimensions?.map((d) => (
-                  <span key={d} className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full border", dimLabels[d]?.bg || "bg-slate-50")}>
-                    {d} {dimLabels[d]?.label}
-                  </span>
-                ))}
-                <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200 font-medium">
-                  {m.valueDomain}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 italic">{m.rationale}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Project Canvas */}
-      {data.suggestedProject && (
-        <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 rounded-2xl border-2 border-indigo-200 shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 text-white">
-            <h4 className="text-base font-bold flex items-center gap-2">
-              <Lightbulb className="h-5 w-5" /> Group Action Learning Project Canvas
-            </h4>
+      {/* Tension Mapped */}
+      {data.tensionMapped && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+          <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-indigo-500" /> Strategic Tension Impact
+          </h4>
+          <p className="text-sm text-slate-700 mb-4">{data.tensionMapped.rationale}</p>
+          <div className="flex gap-2 flex-wrap">
+            {data.tensionMapped.dimensionsImpacted?.map((d: string) => (
+              <span key={d} className={clsx("text-xs font-bold px-3 py-1 rounded-full border", dimLabels[d]?.bg || "bg-slate-50 border-slate-200")}>
+                {d} {dimLabels[d]?.label}
+              </span>
+            ))}
           </div>
-          <div className="p-5 space-y-4">
-            <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Project Title</label>
-              <p className="text-lg font-bold text-slate-800 mt-0.5">{data.suggestedProject.title}</p>
-            </div>
+        </div>
+      )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">TTC Dimension(s)</label>
-                <div className="flex gap-1 flex-wrap mt-1">
-                  {data.suggestedProject.dimensions?.map((d) => (
-                    <span key={d} className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full border", dimLabels[d]?.bg)}>
-                      {d} {dimLabels[d]?.label}
-                    </span>
-                  ))}
+      {/* Project Seeds */}
+      {data.projectSeeds && data.projectSeeds.length > 0 && (
+        <div>
+          <h4 className="text-lg font-bold text-slate-800 mb-4">Proposed Project Seeds</h4>
+          <div className="space-y-4">
+            {data.projectSeeds.map((seed: any, i: number) => (
+              <div key={i} className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 rounded-2xl border border-indigo-200 shadow-sm p-5 hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-2">
+                  <h5 className="text-base font-bold text-indigo-900">{seed.title}</h5>
+                  <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider", 
+                    seed.type === "Exploration" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                  )}>
+                    {seed.type}
+                  </span>
                 </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Value Domain</label>
-                <p className="text-sm font-semibold text-indigo-700 mt-1">{data.suggestedProject.valueDomain}</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Cross-Divisional Challenge</label>
-              <p className="text-sm text-slate-700 mt-0.5">{data.suggestedProject.challenge}</p>
-            </div>
-
-            <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Strategic Hypothesis</label>
-              <p className="text-sm text-slate-700 mt-0.5 bg-white/80 rounded-lg p-2 border border-indigo-100 italic">&ldquo;{data.suggestedProject.hypothesis}&rdquo;</p>
-            </div>
-
-            <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">&ldquo;Higher Dimension&rdquo; Leap</label>
-              <p className="text-sm text-slate-700 mt-0.5">{data.suggestedProject.higherDimensionLeap}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Divisions Involved</label>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {data.suggestedProject.divisionsInvolved?.map((d, i) => (
-                    <span key={i} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">{d}</span>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Key Metrics</label>
-                <ul className="mt-1 space-y-0.5">
-                  {data.suggestedProject.keyMetrics?.map((m, i) => (
-                    <li key={i} className="text-[11px] text-slate-600">• {m}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">First 90 Days</label>
-              <div className="mt-1 space-y-1.5">
-                {data.suggestedProject.first90Days?.map((a, i) => (
-                  <div key={i} className="flex gap-2 items-start">
-                    <span className="flex-shrink-0 h-5 w-5 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">{i + 1}</span>
-                    <p className="text-[11px] text-slate-700">{a}</p>
+                <div className="space-y-3 mt-4">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Strategic Hypothesis</span>
+                    <p className="text-sm text-slate-700 mt-1 bg-white rounded-lg p-3 border border-indigo-100 italic">&ldquo;{seed.hypothesis}&rdquo;</p>
                   </div>
-                ))}
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Higher Dimension Leap</span>
+                    <p className="text-[13px] text-slate-600 mt-1">{seed.higherDimensionLeap}</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
@@ -1137,7 +1139,7 @@ function Level3Strategy({ data }: { data: DimensionData }) {
             <Lightbulb className="h-4 w-4" /> Questions to Deepen Your Thinking
           </h4>
           <div className="space-y-2">
-            {data.coachingQuestions.map((q, i) => (
+            {data.coachingQuestions.map((q: string, i: number) => (
               <p key={i} className="text-sm text-amber-900 italic">💡 {q}</p>
             ))}
           </div>
