@@ -196,7 +196,25 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       doc(db, "teams", teamCode),
       (snap) => {
         if (snap.exists()) {
-          setTeam(snap.data() as TeamData);
+          const raw = snap.data() as TeamData;
+          // Deduplicate memberCards by shareCode (prefer entries with ownerUID set)
+          if (raw.memberCards?.length) {
+            const seen = new Map<string, typeof raw.memberCards[0]>();
+            for (const card of raw.memberCards) {
+              const existing = seen.get(card.shareCode);
+              if (!existing || (card.ownerUID && !existing.ownerUID)) {
+                seen.set(card.shareCode, card);
+              }
+            }
+            const deduped = Array.from(seen.values());
+            // Auto-clean Firestore if duplicates were found
+            if (deduped.length < raw.memberCards.length) {
+              console.log(`🧹 Auto-cleaning ${raw.memberCards.length - deduped.length} duplicate card(s) from Firestore`);
+              updateDoc(doc(db, "teams", teamCode), { memberCards: deduped, updatedAt: new Date().toISOString() }).catch(console.error);
+            }
+            raw.memberCards = deduped;
+          }
+          setTeam(raw);
         } else {
           setTeam(null);
           setTeamCode(null);
@@ -267,19 +285,52 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       }
 
       const teamData = snap.data() as TeamData;
+      const cardWithUID = { ...myCard, ownerUID: user.uid };
 
-      // Check if already a member
+      // Check if already a member by UID
       if (teamData.memberUIDs.includes(user.uid)) {
-        // Already a member — just reconnect
+        // Already a member — update existing card (set ownerUID if missing) and reconnect
+        const updatedCards = teamData.memberCards.map((c) =>
+          c.shareCode === myCard.shareCode ? cardWithUID : c
+        );
+        // Deduplicate by shareCode in case of prior corruption
+        const seen = new Set<string>();
+        const deduped = updatedCards.filter((c) => {
+          if (seen.has(c.shareCode)) return false;
+          seen.add(c.shareCode);
+          return true;
+        });
+        await updateDoc(doc(db, "teams", normalized), {
+          memberCards: deduped,
+          updatedAt: new Date().toISOString(),
+        });
         await setDoc(doc(db, "users", user.uid, "portfolio", "teamMembership"), { teamCode: normalized });
         setTeamCode(normalized);
         return { success: true };
       }
 
-      // Add to team
+      // New member — replace any imported card (same shareCode) or append
+      const existingIdx = teamData.memberCards.findIndex((c) => c.shareCode === myCard.shareCode);
+      let updatedCards: HealthCard[];
+      if (existingIdx >= 0) {
+        // Replace imported card with the user's own card (which has ownerUID)
+        updatedCards = [...teamData.memberCards];
+        updatedCards[existingIdx] = cardWithUID;
+      } else {
+        updatedCards = [...teamData.memberCards, cardWithUID];
+      }
+
+      // Deduplicate by shareCode
+      const seen = new Set<string>();
+      const deduped = updatedCards.filter((c) => {
+        if (seen.has(c.shareCode)) return false;
+        seen.add(c.shareCode);
+        return true;
+      });
+
       await updateDoc(doc(db, "teams", normalized), {
         memberUIDs: arrayUnion(user.uid),
-        memberCards: arrayUnion({ ...myCard, ownerUID: user.uid }),
+        memberCards: deduped,
         updatedAt: new Date().toISOString(),
       });
 
@@ -297,9 +348,21 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   const leaveTeam = useCallback(async () => {
     if (!user || !teamCode) return;
     try {
-      // Remove membership
-      const { deleteDoc } = await import("firebase/firestore");
-      await deleteDoc(doc(db, "users", user.uid, "portfolio", "teamMembership"));
+      // Read current team data to remove user's card
+      const teamSnap = await getDoc(doc(db, "teams", teamCode));
+      if (teamSnap.exists()) {
+        const teamData = teamSnap.data() as TeamData;
+        const filteredCards = teamData.memberCards.filter((c) => c.ownerUID !== user.uid);
+        const filteredUIDs = teamData.memberUIDs.filter((uid) => uid !== user.uid);
+        await updateDoc(doc(db, "teams", teamCode), {
+          memberCards: filteredCards,
+          memberUIDs: filteredUIDs,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      // Remove local membership
+      const { deleteDoc: delDoc } = await import("firebase/firestore");
+      await delDoc(doc(db, "users", user.uid, "portfolio", "teamMembership"));
       setTeamCode(null);
       setTeam(null);
     } catch (e) {
