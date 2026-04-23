@@ -197,6 +197,9 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       (snap) => {
         if (snap.exists()) {
           const raw = snap.data() as TeamData;
+          let needsClean = false;
+          const cleanUpdate: Record<string, any> = { updatedAt: new Date().toISOString() };
+
           // Deduplicate memberCards by shareCode (prefer entries with ownerUID set)
           if (raw.memberCards?.length) {
             const seen = new Map<string, typeof raw.memberCards[0]>();
@@ -207,13 +210,37 @@ export function TeamProvider({ children }: { children: ReactNode }) {
               }
             }
             const deduped = Array.from(seen.values());
-            // Auto-clean Firestore if duplicates were found
             if (deduped.length < raw.memberCards.length) {
-              console.log(`🧹 Auto-cleaning ${raw.memberCards.length - deduped.length} duplicate card(s) from Firestore`);
-              updateDoc(doc(db, "teams", teamCode), { memberCards: deduped, updatedAt: new Date().toISOString() }).catch(console.error);
+              console.log(`🧹 Auto-cleaning ${raw.memberCards.length - deduped.length} duplicate card(s)`);
+              raw.memberCards = deduped;
+              cleanUpdate.memberCards = deduped;
+              needsClean = true;
             }
-            raw.memberCards = deduped;
           }
+
+          // Deduplicate placementState.placements by shareCode
+          if (raw.placementState?.placements?.length) {
+            const validShareCodes = new Set(raw.memberCards.map((c) => c.shareCode));
+            const seenPlacement = new Set<string>();
+            const dedupedPlacements = raw.placementState.placements.filter((p) => {
+              // Remove duplicates AND orphaned placements (no matching card)
+              if (seenPlacement.has(p.shareCode)) return false;
+              seenPlacement.add(p.shareCode);
+              return validShareCodes.has(p.shareCode);
+            });
+            if (dedupedPlacements.length < raw.placementState.placements.length) {
+              console.log(`🧹 Auto-cleaning ${raw.placementState.placements.length - dedupedPlacements.length} orphaned/duplicate placement(s)`);
+              raw.placementState = { ...raw.placementState, placements: dedupedPlacements };
+              cleanUpdate["placementState.placements"] = dedupedPlacements;
+              needsClean = true;
+            }
+          }
+
+          // Write cleanup to Firestore if needed
+          if (needsClean) {
+            updateDoc(doc(db, "teams", teamCode), cleanUpdate).catch(console.error);
+          }
+
           setTeam(raw);
         } else {
           setTeam(null);
