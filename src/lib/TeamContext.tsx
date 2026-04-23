@@ -132,6 +132,7 @@ interface TeamContextType {
   adjustPosition: (shareCode: string, newPosition: { x: number; y: number }, bubbleSize?: number) => Promise<void>;
   savePortfolioSynthesis: (synthesis: string) => Promise<void>;
   initPlacements: (cards: HealthCard[], computeAIPosition: (card: HealthCard) => { x: number; y: number }) => Promise<void>;
+  syncPlacements: (cards: HealthCard[], existingPlacements: MemberPlacement[], computeAIPosition: (card: HealthCard) => { x: number; y: number }) => Promise<void>;
   resetPlacements: () => Promise<void>;
 
   // Derived
@@ -374,9 +375,44 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     computeAIPosition: (card: HealthCard) => { x: number; y: number }
   ) => {
     if (!teamCode || !team) return;
-    // Don't re-init if already exists
-    if (team.placementState?.placements?.length) return;
-    const placements: MemberPlacement[] = cards.map((card) => ({
+
+    const existing = team.placementState?.placements || [];
+
+    // Case 1: Fresh init — no placements exist yet
+    if (existing.length === 0) {
+      const placements: MemberPlacement[] = cards.map((card) => ({
+        shareCode: card.shareCode,
+        ownerUID: card.ownerUID || "",
+        ownerName: card.ownerName,
+        businessName: card.businessName,
+        selfPosition: null,
+        justification: "",
+        locked: false,
+        aiPosition: computeAIPosition(card),
+        adjustedPosition: null,
+        challenges: [],
+        aiChallengeGenerated: false,
+        bubbleSize: 5,
+      }));
+      const state: PlacementState = { placements, allRevealed: false, portfolioSynthesis: null };
+      try {
+        await updateDoc(doc(db, "teams", teamCode), {
+          placementState: state,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("Init placements error:", e);
+      }
+      return;
+    }
+
+    // Case 2: Placements exist — check for new members who joined after init
+    const existingShareCodes = new Set(existing.map((p) => p.shareCode));
+    const newCards = cards.filter((c) => !existingShareCodes.has(c.shareCode));
+
+    if (newCards.length === 0) return; // everyone already has a placement
+
+    const newPlacements: MemberPlacement[] = newCards.map((card) => ({
       shareCode: card.shareCode,
       ownerUID: card.ownerUID || "",
       ownerName: card.ownerName,
@@ -390,16 +426,72 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       aiChallengeGenerated: false,
       bubbleSize: 5,
     }));
-    const state: PlacementState = { placements, allRevealed: false, portfolioSynthesis: null };
+
+    const merged = [...existing, ...newPlacements];
     try {
       await updateDoc(doc(db, "teams", teamCode), {
-        placementState: state,
+        "placementState.placements": merged,
         updatedAt: new Date().toISOString(),
       });
+      console.log(`Synced ${newCards.length} new member(s) into placements.`);
     } catch (e) {
-      console.error("Init placements error:", e);
+      console.error("Sync new placements error:", e);
     }
   }, [teamCode, team]);
+
+  // Sync late-joiners or patch existing placements
+  // If cards is empty, just writes existingPlacements as-is (for patching ownerUIDs etc.)
+  const syncPlacements = useCallback(async (
+    cards: HealthCard[],
+    existingPlacements: MemberPlacement[],
+    computeAIPosition: (card: HealthCard) => { x: number; y: number }
+  ) => {
+    if (!teamCode) return;
+    
+    // Patch mode: no cards, just write the placements directly
+    if (cards.length === 0 && existingPlacements.length > 0) {
+      try {
+        await updateDoc(doc(db, "teams", teamCode), {
+          "placementState.placements": existingPlacements,
+          updatedAt: new Date().toISOString(),
+        });
+        console.log(`🔧 Patched placements in Firestore`);
+      } catch (e) {
+        console.error("Patch placements error:", e);
+      }
+      return;
+    }
+
+    // Sync mode: find missing cards and append
+    const existingShareCodes = new Set(existingPlacements.map((p) => p.shareCode));
+    const newCards = cards.filter((c) => !existingShareCodes.has(c.shareCode));
+    if (newCards.length === 0) return;
+
+    const newPlacements: MemberPlacement[] = newCards.map((card) => ({
+      shareCode: card.shareCode,
+      ownerUID: card.ownerUID || "",
+      ownerName: card.ownerName,
+      businessName: card.businessName,
+      selfPosition: null,
+      justification: "",
+      locked: false,
+      aiPosition: computeAIPosition(card),
+      adjustedPosition: null,
+      challenges: [],
+      aiChallengeGenerated: false,
+      bubbleSize: 5,
+    }));
+    const merged = [...existingPlacements, ...newPlacements];
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        "placementState.placements": merged,
+        updatedAt: new Date().toISOString(),
+      });
+      console.log(`✅ Synced ${newCards.length} new member(s) into placements:`, newCards.map(c => c.ownerName));
+    } catch (e) {
+      console.error("Sync new placements error:", e);
+    }
+  }, [teamCode]); // Only depends on teamCode string — NO stale closure risk
 
   const savePlacement = useCallback(async (
     shareCode: string,
@@ -545,6 +637,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         adjustPosition,
         savePortfolioSynthesis,
         initPlacements,
+        syncPlacements,
         resetPlacements,
         isLeader,
         isInTeam,
