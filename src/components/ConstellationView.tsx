@@ -152,7 +152,7 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
         {/* Level Tabs */}
         <div className="flex gap-1 bg-white/10 rounded-xl p-1">
           {[
-            { level: 1 as const, icon: BarChart3, label: "Compare" },
+            { level: 1 as const, icon: BarChart3, label: "Mapping" },
             { level: 2 as const, icon: Sparkles, label: "Patterns" },
             { level: 3 as const, icon: Map, label: "Strategy" },
           ].map(({ level, icon: Icon, label }) => (
@@ -312,7 +312,7 @@ function getQuadrantLabel(x: number, y: number): string {
 
 function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
   const { user } = useAuth();
-  const { team, initPlacements, savePlacement, lockPlacement, revealAll, addChallenge, adjustPosition, savePortfolioSynthesis, resetPlacements, isLeader } = useTeam();
+  const { team, initPlacements, syncPlacements, savePlacement, lockPlacement, revealAll, addChallenge, adjustPosition, savePortfolioSynthesis, resetPlacements, isLeader } = useTeam();
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [challengeText, setChallengeText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -328,16 +328,66 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
   const placements = ps?.placements || [];
   const allRevealed = ps?.allRevealed || false;
 
-  // Find current user's placement
-  const myPlacement = placements.find((p) => p.ownerUID === user?.uid);
+  // Find current user's placement — with fallback matching via shareCode
+  const myCard = cards.find((c) => c.ownerUID === user?.uid);
+  let myPlacement = placements.find((p) => p.ownerUID === user?.uid);
+  
+  // Fallback: if no placement matched by ownerUID, try matching through the card's shareCode
+  if (!myPlacement && myCard) {
+    myPlacement = placements.find((p) => p.shareCode === myCard.shareCode);
+    // Auto-patch: fix the ownerUID in Firestore if we found a match by shareCode
+    if (myPlacement && user?.uid) {
+      console.log(`🔧 Patching placement ownerUID for ${myCard.ownerName}: shareCode=${myCard.shareCode}, fixing ownerUID from "${myPlacement.ownerUID}" to "${user.uid}"`);
+      const patchedPlacements = placements.map((p) =>
+        p.shareCode === myCard.shareCode ? { ...p, ownerUID: user.uid } : p
+      );
+      syncPlacements([], patchedPlacements, computeAIPosition); // empty cards = no new additions, just writes the patched array
+    }
+  }
   const myShareCode = myPlacement?.shareCode || "";
 
-  // Initialize placements on first load
+  // ── Diagnostic logging (remove after debugging) ──
   useEffect(() => {
-    if (cards.length >= 2 && team && !ps?.placements?.length) {
-      initPlacements(cards, computeAIPosition);
+    if (team && user) {
+      console.log(`📋 PLACEMENT DEBUG:`, {
+        userUID: user.uid,
+        cardsCount: cards.length,
+        placementsCount: placements.length,
+        myCardShareCode: myCard?.shareCode,
+        myCardOwnerUID: myCard?.ownerUID,
+        myPlacementFound: !!myPlacement,
+        myPlacementShareCode: myPlacement?.shareCode,
+        myPlacementOwnerUID: myPlacement?.ownerUID,
+        allShareCodes: cards.map(c => c.shareCode),
+        placementShareCodes: placements.map(p => p.shareCode),
+        placementOwnerUIDs: placements.map(p => p.ownerUID),
+      });
     }
-  }, [cards, team]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [team, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initialize placements on first load, and sync new members who join later
+  const syncRef = useRef(false);
+  useEffect(() => {
+    if (cards.length < 2 || !team) return;
+
+    const existingPlacements = team.placementState?.placements || [];
+
+    if (existingPlacements.length === 0) {
+      // Fresh init — create all placements
+      initPlacements(cards, computeAIPosition);
+    } else if (!syncRef.current) {
+      // Check for late-joiners by shareCode
+      const existingShareCodes = new Set(existingPlacements.map((p) => p.shareCode));
+      const hasMissing = cards.some((c) => !existingShareCodes.has(c.shareCode));
+      if (hasMissing) {
+        console.log(`🔄 Detected ${cards.filter(c => !existingShareCodes.has(c.shareCode)).length} missing placement(s), syncing...`);
+        syncRef.current = true;
+        syncPlacements(cards, existingPlacements, computeAIPosition).finally(() => {
+          syncRef.current = false;
+        });
+      }
+    }
+  }, [cards.length, team?.placementState?.placements?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore localDragPos from Firestore (e.g. after leaving and re-entering Level 1)
   useEffect(() => {
@@ -889,104 +939,393 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
 }
 
 // ═══════════════════════════════════════
-// LEVEL 2: Pattern Recognition (Chat History + VRIO Radar)
+// STRATEGIC INSIGHT CHART — Visual Dot-Strip
 // ═══════════════════════════════════════
 
-function VRIORadar({ cards }: { cards: any[] }) {
-  const size = 300;
-  const center = size / 2;
-  const radius = 100;
-  
-  // 5 levels of grid
-  const grids = [1, 2, 3, 4, 5].map(level => {
-    const r = (level / 5) * radius;
-    return `${center},${center - r} ${center + r},${center} ${center},${center + r} ${center - r},${center}`;
+interface DimensionDef {
+  key: string;
+  label: string;
+  group: string;
+  extract: (c: HealthCard) => number;
+  max: number;
+  type: 'strength' | 'threat';
+}
+
+const INSIGHT_DIMENSIONS: DimensionDef[] = [
+  { key: 'bm_vp', label: 'Value Proposition', group: 'Business Model', extract: (c) => c.aiAnalysis?.businessModel?.valueProposition?.score || 0, max: 5, type: 'strength' },
+  { key: 'bm_va', label: 'Value Architecture', group: 'Business Model', extract: (c) => c.aiAnalysis?.businessModel?.valueArchitecture?.score || 0, max: 5, type: 'strength' },
+  { key: 'bm_ct', label: 'Revenue Model', group: 'Business Model', extract: (c) => c.aiAnalysis?.businessModel?.contributions?.score || 0, max: 5, type: 'strength' },
+  { key: 'ff_ne', label: 'New Entrants', group: 'Five Forces', extract: (c) => c.aiAnalysis?.fiveForces?.newEntrants?.severity || 0, max: 10, type: 'threat' },
+  { key: 'ff_su', label: 'Supplier Power', group: 'Five Forces', extract: (c) => c.aiAnalysis?.fiveForces?.suppliers?.severity || 0, max: 10, type: 'threat' },
+  { key: 'ff_ri', label: 'Rivalry', group: 'Five Forces', extract: (c) => c.aiAnalysis?.fiveForces?.rivalry?.severity || 0, max: 10, type: 'threat' },
+  { key: 'ff_bu', label: 'Buyer Power', group: 'Five Forces', extract: (c) => c.aiAnalysis?.fiveForces?.buyers?.severity || 0, max: 10, type: 'threat' },
+  { key: 'ff_sb', label: 'Substitutes', group: 'Five Forces', extract: (c) => c.aiAnalysis?.fiveForces?.substitutes?.severity || 0, max: 10, type: 'threat' },
+  { key: 'vr_v', label: 'Valuable', group: 'VRIO', extract: (c) => c.aiAnalysis?.vrio?.valuable?.strength || 0, max: 5, type: 'strength' },
+  { key: 'vr_r', label: 'Rare', group: 'VRIO', extract: (c) => c.aiAnalysis?.vrio?.rare?.strength || 0, max: 5, type: 'strength' },
+  { key: 'vr_i', label: 'Inimitable', group: 'VRIO', extract: (c) => c.aiAnalysis?.vrio?.inimitable?.strength || 0, max: 5, type: 'strength' },
+  { key: 'vr_o', label: 'Organized', group: 'VRIO', extract: (c) => c.aiAnalysis?.vrio?.organized?.strength || 0, max: 5, type: 'strength' },
+];
+
+type InsightTag = 'shared-risk' | 'shared-strength' | 'divergent' | 'unique-edge' | 'neutral';
+
+function classifyDimension(values: number[], max: number, type: 'strength' | 'threat'): InsightTag {
+  const valid = values.filter(v => v > 0);
+  if (valid.length < 2) return 'neutral';
+  const avg = valid.reduce((a, b) => a + b, 0) / valid.length;
+  const ratio = avg / max;
+  const stdDev = Math.sqrt(valid.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / valid.length);
+  const cv = stdDev / avg;
+  if (cv > 0.25) return 'divergent';
+  if (type === 'strength' && ratio > 0.7) return 'shared-strength';
+  if (type === 'threat' && ratio > 0.6) return 'shared-risk';
+  if (type === 'threat' && ratio < 0.35) return 'shared-strength';
+  if (type === 'strength' && ratio < 0.35) return 'shared-risk';
+  if (valid.length >= 3) {
+    const sorted = [...valid].sort((a, b) => a - b);
+    const gapTop = sorted[sorted.length - 1] - sorted[sorted.length - 2];
+    const gapBot = sorted[1] - sorted[0];
+    if (gapTop > max * 0.3 || gapBot > max * 0.3) return 'unique-edge';
+  }
+  return 'neutral';
+}
+
+const TAG_CONFIG: Record<InsightTag, { label: string; emoji: string; color: string; bg: string; border: string }> = {
+  'shared-risk': { label: 'Shared Risk', emoji: '⚡', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200' },
+  'shared-strength': { label: 'Team Strength', emoji: '💪', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  'divergent': { label: 'Divergent', emoji: '🔀', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+  'unique-edge': { label: 'Unique Edge', emoji: '🌟', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+  'neutral': { label: '', emoji: '', color: 'text-slate-500', bg: 'bg-white', border: 'border-slate-100' },
+};
+
+const MEMBER_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+
+function StrategicInsightChart({ cards }: { cards: HealthCard[] }) {
+  const [hoveredMember, setHoveredMember] = useState<number | null>(null);
+  const groups = [...new Set(INSIGHT_DIMENSIONS.map(d => d.group))];
+  const activeDims = INSIGHT_DIMENSIONS.filter(dim => cards.some(c => dim.extract(c) > 0));
+  const priorityOrder: Record<InsightTag, number> = { 'shared-risk': 0, 'divergent': 1, 'unique-edge': 2, 'shared-strength': 3, 'neutral': 4 };
+  const dimData = activeDims.map(dim => {
+    const values = cards.map(c => dim.extract(c));
+    const tag = classifyDimension(values, dim.max, dim.type);
+    return { dim, values, tag };
   });
 
-  const getPoints = (v: number, r: number, i: number, o: number) => {
-    const pV = `${center},${center - (v/5)*radius}`;
-    const pR = `${center + (r/5)*radius},${center}`;
-    const pI = `${center},${center + (i/5)*radius}`;
-    const pO = `${center - (o/5)*radius},${center}`;
-    return `${pV} ${pR} ${pI} ${pO}`;
-  };
-
-  const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
-
   return (
-    <div className="flex flex-col items-center justify-center relative w-[300px] h-[300px] mx-auto">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {/* Background Grid */}
-        {grids.map((points, idx) => (
-          <polygon key={idx} points={points} fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray={idx < 4 ? "4 4" : "none"} />
+    <div className="space-y-2">
+      {/* Member Legend */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {cards.map((card, idx) => (
+          <button
+            key={idx}
+            className={clsx(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border",
+              hoveredMember === idx
+                ? 'bg-slate-800 text-white border-slate-800 shadow-md scale-105'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+            )}
+            onMouseEnter={() => setHoveredMember(idx)}
+            onMouseLeave={() => setHoveredMember(null)}
+          >
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: MEMBER_COLORS[idx % MEMBER_COLORS.length] }} />
+            {card.ownerName}
+          </button>
         ))}
-        {/* Axis Lines */}
-        <line x1={center} y1={center - radius} x2={center} y2={center + radius} stroke="#cbd5e1" strokeWidth="1" />
-        <line x1={center - radius} y1={center} x2={center + radius} y2={center} stroke="#cbd5e1" strokeWidth="1" />
-        
-        {/* Member Polygons */}
-        {cards?.map((card, idx) => {
-          const vrio = card.aiAnalysis?.vrio || {};
-          const v = vrio.valuable?.strength || 1;
-          const r = vrio.rare?.strength || 1;
-          const i = vrio.inimitable?.strength || 1;
-          const o = vrio.organized?.strength || 1;
-          const points = getPoints(v, r, i, o);
-          return (
-            <polygon 
-              key={idx} 
-              points={points} 
-              fill={colors[idx % colors.length]} 
-              fillOpacity="0.15" 
-              stroke={colors[idx % colors.length]} 
-              strokeWidth="2" 
-              className="transition-all duration-300 hover:fill-opacity-50"
-            />
-          );
-        })}
-      </svg>
-      {/* Labels */}
-      <span className="absolute top-[20px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valuable</span>
-      <span className="absolute right-[10px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rare</span>
-      <span className="absolute bottom-[20px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Inimitable</span>
-      <span className="absolute left-[10px] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Organized</span>
+      </div>
+
+      {/* Dimension Strips, grouped */}
+      {groups.map(group => {
+        const groupDims = dimData.filter(d => d.dim.group === group);
+        if (groupDims.length === 0) return null;
+        // Sort within each group by insight priority
+        const sorted = [...groupDims].sort((a, b) => priorityOrder[a.tag] - priorityOrder[b.tag]);
+        const groupColor = group === 'Business Model' ? 'text-blue-600'
+          : group === 'Five Forces' ? 'text-rose-600'
+          : 'text-emerald-600';
+
+        return (
+          <div key={group} className="mb-3">
+            <div className={clsx("text-[9px] font-bold uppercase tracking-widest mb-1.5 px-1", groupColor)}>
+              {group}
+            </div>
+            <div className="space-y-1">
+              {sorted.map(({ dim, values, tag }) => {
+                const tagCfg = TAG_CONFIG[tag];
+                return (
+                  <div key={dim.key} className={clsx("flex items-center gap-2 rounded-xl px-3 py-2.5 border transition-colors", tagCfg.bg, tagCfg.border)}>
+                    {/* Label */}
+                    <div className="w-[110px] flex-shrink-0">
+                      <span className="text-[11px] font-semibold text-slate-700">{dim.label}</span>
+                    </div>
+
+                    {/* Dot Strip */}
+                    <div className="flex-1 relative h-5">
+                      {/* Gradient track */}
+                      <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+                        <div className={clsx(
+                          "w-full h-1.5 rounded-full",
+                          dim.type === 'strength'
+                            ? 'bg-gradient-to-r from-rose-100 via-slate-100 to-emerald-100'
+                            : 'bg-gradient-to-r from-emerald-100 via-slate-100 to-rose-100'
+                        )} />
+                      </div>
+
+                      {/* Range band (team spread) */}
+                      {(() => {
+                        const valid = values.filter(v => v > 0);
+                        if (valid.length < 2) return null;
+                        const minPct = (Math.min(...valid) / dim.max) * 100;
+                        const maxPct = (Math.max(...valid) / dim.max) * 100;
+                        return (
+                          <div
+                            className="absolute top-1/2 -translate-y-1/2 h-3 rounded-full bg-slate-200/50"
+                            style={{ left: `${minPct}%`, width: `${Math.max(maxPct - minPct, 1)}%` }}
+                          />
+                        );
+                      })()}
+
+                      {/* Member dots */}
+                      {values.map((val, memberIdx) => {
+                        if (val <= 0) return null;
+                        const pct = (val / dim.max) * 100;
+                        const isHovered = hoveredMember === memberIdx;
+                        const isDimmed = hoveredMember !== null && hoveredMember !== memberIdx;
+                        return (
+                          <div
+                            key={memberIdx}
+                            className={clsx(
+                              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-white shadow-sm transition-all duration-200",
+                              isHovered ? 'w-4 h-4 z-20 scale-125 ring-2 ring-offset-1' : 'w-3 h-3 z-10',
+                              isDimmed && 'opacity-20'
+                            )}
+                            style={{
+                              left: `${pct}%`,
+                              backgroundColor: MEMBER_COLORS[memberIdx % MEMBER_COLORS.length],
+                            }}
+                            title={`${cards[memberIdx]?.ownerName}: ${val}/${dim.max}`}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {/* Insight Tag */}
+                    {tag !== 'neutral' && (
+                      <span className={clsx("text-[9px] font-bold uppercase tracking-wider flex-shrink-0 whitespace-nowrap", tagCfg.color)}>
+                        {tagCfg.emoji} {tagCfg.label}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Axis hint */}
+      <div className="flex justify-between text-[9px] text-slate-400 px-[130px] mt-1">
+        <span>← Weak / Low</span>
+        <span>Strong / High →</span>
+      </div>
     </div>
   );
 }
 
-function VRIOLegend({ cards }: { cards: any[] }) {
-  const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
+// ═══════════════════════════════════════
+// AMBIDEXTROUS STRATEGY MAP (World Warriors)
+// ═══════════════════════════════════════
+
+function getWarriorArchetype(card: HealthCard) {
+  const bm = card.aiAnalysis?.businessModel;
+  const attack = ((bm?.valueProposition?.score || 0) + (bm?.valueArchitecture?.score || 0) + (bm?.contributions?.score || 0)) / 15 * 100;
+  
+  const ff = card.aiAnalysis?.fiveForces;
+  const threatSum = (ff?.newEntrants?.severity || 0) + (ff?.suppliers?.severity || 0) + (ff?.rivalry?.severity || 0) + (ff?.buyers?.severity || 0) + (ff?.substitutes?.severity || 0);
+  const defense = 100 - (threatSum / 50 * 100);
+  
+  const vrio = card.aiAnalysis?.vrio;
+  const unique = ((vrio?.rare?.strength || 0) + (vrio?.inimitable?.strength || 0)) / 10 * 100;
+
+  // Default: Viking (Expand zone)
+  let icon = "🪓"; let title = "Viking"; let role = "expand";
+  let desc = "Aggressive scaler. Rapidly expanding into adjacent markets with high risk.";
+  let bg = "bg-rose-900 border-rose-500 text-rose-100 shadow-rose-500/20";
+  let text = "text-rose-300";
+
+  if (unique > 70 && attack > 70 && defense > 70) {
+    icon = "🗡️"; title = "Spartan"; role = "exploit";
+    desc = "Elite core. Dominates the existing market with unbreakable positioning across all dimensions.";
+    bg = "bg-amber-900 border-amber-500 text-amber-100 shadow-amber-500/20";
+    text = "text-amber-300";
+  } else if (defense > 65) {
+    icon = "🛡️"; title = "Legionnaire"; role = "exploit";
+    desc = "The Tank. Defends legacy cash flows and holds market share against massive competitive pressure.";
+    bg = "bg-slate-800 border-slate-500 text-slate-100 shadow-slate-500/20";
+    text = "text-slate-300";
+  } else if (attack >= 60 && defense < 65) {
+    icon = "🪓"; title = "Viking"; role = "expand";
+    desc = "Aggressive scaler. Rapidly expanding into adjacent markets with high risk and low structural defense.";
+    bg = "bg-rose-900 border-rose-500 text-rose-100 shadow-rose-500/20";
+    text = "text-rose-300";
+  } else if (unique > 60 && attack < 60) {
+    icon = "🥷"; title = "Ninja"; role = "explore";
+    desc = "Disruptive innovator. Bypasses direct competition entirely using rare, inimitable capabilities.";
+    bg = "bg-violet-900 border-violet-500 text-violet-100 shadow-violet-500/20";
+    text = "text-violet-300";
+  } else {
+    icon = "🧘‍♂️"; title = "Shaolin Monk"; role = "explore";
+    desc = "Deep R&D engine. Builds unique internal capabilities for future breakthroughs, not immediate revenue.";
+    bg = "bg-emerald-900 border-emerald-500 text-emerald-100 shadow-emerald-500/20";
+    text = "text-emerald-300";
+  }
+
+  return { title, icon, desc, attack, defense, unique, bg, text, role };
+}
+
+function TacticalBattleMap({ cards }: { cards: HealthCard[] }) {
+  const party = cards.map(c => ({ name: c.ownerName || c.businessName, ...getWarriorArchetype(c) }));
+  
+  const exploit = party.filter(p => p.role === 'exploit');
+  const expand  = party.filter(p => p.role === 'expand');
+  const explore = party.filter(p => p.role === 'explore');
+
+  // Formation analysis
+  const hasExploit = exploit.length > 0;
+  const hasExpand  = expand.length > 0;
+  const hasExplore = explore.length > 0;
+  const filledZones = [hasExploit, hasExpand, hasExplore].filter(Boolean).length;
+
+  let warning = "";
+  if (filledZones === 3) {
+    warning = "✅ AMBIDEXTROUS ORGANIZATION: Your portfolio spans all three horizons — core defense, aggressive scaling, and disruptive innovation.";
+  } else if (!hasExploit) {
+    warning = "⚠️ NO CORE DEFENDERS: Your portfolio has zero Exploitation power. Without a defended cash engine, your Expand and Explore initiatives have no funding source.";
+  } else if (!hasExplore) {
+    warning = "⚠️ INNOVATION GAP: Your portfolio has zero Exploration. You are optimizing the present but not investing in the future. Disruption risk is critical.";
+  } else if (!hasExpand) {
+    warning = "⚠️ SCALING GAP: You have core defense and R&D — but nobody aggressively scaling winning ideas into adjacent markets.";
+  } else {
+    warning = "✅ SOLID FORMATION: You cover " + filledZones + " of 3 strategic horizons.";
+  }
+
+  const renderToken = (p: any, i: number) => (
+    <div key={i} className={clsx("w-40 p-3 rounded-xl border-2 flex flex-col items-center text-center transition-all duration-300 hover:scale-105 shadow-xl relative group z-20", p.bg)}>
+      <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-950 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-white shadow-xl z-30">
+         {Math.round((p.attack + p.defense + p.unique) / 3)}
+      </div>
+      <div className="text-3xl mb-1 drop-shadow-md">{p.icon}</div>
+      <h4 className="font-extrabold text-[12px] truncate w-full text-white mb-0.5">{p.name}</h4>
+      <span className={clsx("text-[9px] font-black uppercase tracking-widest", p.text)}>{p.title}</span>
+      
+      {/* Tooltip on hover */}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-2 rounded-lg bg-slate-900 border border-slate-700 text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-2xl">
+         {p.desc}
+      </div>
+      
+      <div className="w-full mt-3 space-y-1.5 px-1 pb-1">
+         <div>
+            <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-0.5"><span>ATK ⚔️</span><span>{Math.round(p.attack)}</span></div>
+            <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{width: `${p.attack}%`}}/></div>
+         </div>
+         <div>
+            <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-0.5"><span>DEF 🛡️</span><span>{Math.round(p.defense)}</span></div>
+            <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{width: `${p.defense}%`}}/></div>
+         </div>
+         <div>
+            <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-0.5"><span>MGC 🪄</span><span>{Math.round(p.unique)}</span></div>
+            <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden"><div className="h-full bg-violet-500" style={{width: `${p.unique}%`}}/></div>
+         </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex flex-wrap gap-3 justify-center mt-4">
-      {cards.map((card: any, idx: number) => (
-        <div key={idx} className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[idx % colors.length] }} />
-          <span className="text-[11px] text-slate-600 font-medium">{card.ownerName || card.businessName}</span>
+    <div className="space-y-4">
+      {/* Warning Banner */}
+      <div className={clsx("p-3 rounded-xl border flex gap-3 text-xs font-medium shadow-sm w-full", 
+        warning.startsWith("✅") ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"
+      )}>
+        <span className="flex-1 text-center font-bold">{warning}</span>
+      </div>
+
+      {/* AMBIDEXTROUS STRATEGY MAP */}
+      <div className="relative w-full rounded-3xl overflow-hidden border-[6px] border-slate-900 bg-slate-950 shadow-2xl flex flex-col mt-6">
+        {/* Dot Grid Background pattern */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+
+        {/* ── EXPLOIT ZONE ── */}
+        <div className="relative border-b-2 border-dashed border-slate-800/60 py-8 px-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30">
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-400">🏰 Exploit</span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">Defend core cash flows · Maximize efficiency · Hold market share</span>
+          </div>
+          <div className="flex justify-center flex-wrap gap-4 min-h-[120px] items-center">
+            {exploit.length > 0 ? exploit.map((p, i) => renderToken(p, i)) : (
+              <div className="flex flex-col items-center gap-1 py-6">
+                <span className="text-rose-500/60 text-xs font-bold">⚠️ EMPTY ZONE</span>
+                <span className="text-slate-600 text-[10px]">No divisions defending the core</span>
+              </div>
+            )}
+          </div>
         </div>
-      ))}
+
+        {/* ── EXPAND ZONE ── */}
+        <div className="relative border-b-2 border-dashed border-slate-800/60 py-8 px-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/30">
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-400">🪓 Expand</span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">Scale winning ideas · Adjacent markets · Aggressive growth</span>
+          </div>
+          <div className="flex justify-center flex-wrap gap-4 min-h-[120px] items-center">
+            {expand.length > 0 ? expand.map((p, i) => renderToken(p, i)) : (
+              <div className="flex flex-col items-center gap-1 py-6">
+                <span className="text-amber-500/60 text-xs font-bold">⚠️ EMPTY ZONE</span>
+                <span className="text-slate-600 text-[10px]">No divisions aggressively scaling</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── EXPLORE ZONE ── */}
+        <div className="relative py-8 px-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="px-3 py-1.5 rounded-lg bg-violet-500/20 border border-violet-500/30">
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-violet-400">🌌 Explore</span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">Disruptive innovation · Blue Ocean search · Deep R&D</span>
+          </div>
+          <div className="flex justify-center flex-wrap gap-4 min-h-[120px] items-center">
+            {explore.length > 0 ? explore.map((p, i) => renderToken(p, i)) : (
+              <div className="flex flex-col items-center gap-1 py-6">
+                <span className="text-violet-500/60 text-xs font-bold">⚠️ EMPTY ZONE</span>
+                <span className="text-slate-600 text-[10px]">No divisions investing in the future</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
 
 function Level2Patterns({ data, cards, onSelectTension }: { data: PatternData; cards: HealthCard[]; onSelectTension: (tension: string) => void }) {
-  // We are expecting: teamNarrative, exploitInsights, exploreInsights
-  // For backward compatibility (or if data isn't ready), fallback gracefully
   const exploit = data.exploitInsights || [];
   const explore = data.exploreInsights || [];
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto pb-20">
       <div className="text-center">
-        <h3 className="text-2xl font-bold text-slate-800 mb-2">Pattern Discovery</h3>
-        <p className="text-slate-500">AI has analyzed {cards.length} divisions' health cards and chat histories to find hidden patterns.</p>
+        <h3 className="text-2xl font-bold text-slate-800 mb-2">Ambidextrous Strategy Map</h3>
+        <p className="text-sm text-slate-500 max-w-xl mx-auto">
+           Your divisions are warriors. The AI analyzed their scores and mapped them across 3 strategic horizons: <strong>Exploit</strong> (defend the core), <strong>Expand</strong> (scale aggressively), and <strong>Explore</strong> (disrupt the future).
+        </p>
       </div>
 
-      {/* VRIO Overlap Radar */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col items-center">
-        <h4 className="text-sm font-bold text-slate-800 mb-2">Team Capability Overlay (VRIO)</h4>
-        <p className="text-xs text-slate-400 mb-6 max-w-md text-center">Where does the team converge? Where do you diverge? Hover over the shapes to isolate divisions.</p>
-        <VRIORadar cards={cards} />
-        <VRIOLegend cards={cards} />
+      <div className="w-full">
+        <TacticalBattleMap cards={cards} />
       </div>
 
       {/* Team Narrative */}
@@ -994,7 +1333,7 @@ function Level2Patterns({ data, cards, onSelectTension }: { data: PatternData; c
         <div className="bg-gradient-to-r from-slate-800 to-indigo-900 rounded-2xl p-6 shadow-md text-white">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="h-5 w-5 text-indigo-300" />
-            <h4 className="text-sm font-bold text-indigo-100 uppercase tracking-wider">Strategic Narrative</h4>
+            <h4 className="text-sm font-bold text-indigo-100 uppercase tracking-wider">The Dungeon Master's Assessment</h4>
           </div>
           <p className="text-sm leading-relaxed text-indigo-50">{data.teamNarrative}</p>
         </div>
