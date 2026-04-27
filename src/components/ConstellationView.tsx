@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { type HealthCard } from "@/lib/PortfolioContext";
-import { useTeam, type PatternData, type DimensionData, type ChatMessage, type ChallengeEntry, type MemberPlacement } from "@/lib/TeamContext";
+import { useTeam, type PatternData, type DimensionData, type ChatMessage, type ChallengeEntry, type MemberPlacement, type StrategyZone } from "@/lib/TeamContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useDragOnGrid } from "@/lib/useDragOnGrid";
 import {
@@ -19,7 +19,7 @@ interface ConstellationViewProps {
 }
 
 export default function ConstellationView({ onBack }: ConstellationViewProps) {
-  const { team, savePatterns, saveDimensions, clearDimensions, addChatMessage } = useTeam();
+  const { team, savePatterns, saveDimensions, clearDimensions, addChatMessage, addZoneChatMessage, saveSwotAnalysis } = useTeam();
   const [activeLevel, setActiveLevel] = useState<1 | 2 | 3>(1);
   const [loadingPatterns, setLoadingPatterns] = useState(false);
   const [loadingDimensions, setLoadingDimensions] = useState(false);
@@ -34,9 +34,15 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
   const dimensions = team?.dimensions || null;
   const chatMessages = team?.chatMessages || [];
 
+  const prevChatCount = useRef(chatMessages.length);
+  const chatMounted = useRef(false);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+    if (!chatMounted.current) { chatMounted.current = true; prevChatCount.current = chatMessages.length; return; }
+    if (chatMessages.length > prevChatCount.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    prevChatCount.current = chatMessages.length;
+  }, [chatMessages.length]);
 
   // ── Fetch patterns (Level 2) ──
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -189,14 +195,14 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
                     <button onClick={() => { setFetchError(null); fetchPatterns(); }} className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors">Retry</button>
                   </div>
                 : patterns && patterns.exploitInsights
-                  ? <Level2Patterns data={patterns} cards={cards} onSelectTension={(t) => { setSelectedTension(t); clearDimensions(); setActiveLevel(3); }} />
+                  ? <Level2Patterns data={patterns} cards={cards} onSelectTension={(t) => { setSelectedTension(t); clearDimensions(); setActiveLevel(3); }} zoneChatMessages={team?.zoneChatMessages} addZoneChatMessage={addZoneChatMessage} savedClusters={team?.swotClusters} savedTranslations={team?.swotTranslations} saveSwotAnalysis={saveSwotAnalysis} />
                   : null
           )}
           {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to strategic dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
         </div>
 
-        {/* Chat Panel (always visible for Levels 2-3) */}
-        {activeLevel >= 2 && (
+        {/* Chat Panel (only for Level 3) */}
+        {activeLevel === 3 && (
           <div className="w-[380px] border-l border-slate-200 bg-white flex flex-col flex-shrink-0">
             <div className="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
               <h3 className="text-sm font-bold text-indigo-800 flex items-center gap-2">
@@ -1131,278 +1137,743 @@ function StrategicInsightChart({ cards }: { cards: HealthCard[] }) {
 }
 
 // ═══════════════════════════════════════
-// AMBIDEXTROUS STRATEGY MAP (World Warriors)
+// VALUE CREATION VENN DIAGRAM
 // ═══════════════════════════════════════
 
-function getWarriorArchetype(card: HealthCard) {
+type VennRegion = 'core' | 'social' | 'nature' | 'core-social' | 'core-nature' | 'social-nature' | 'all';
+
+function getValueScores(card: HealthCard): { core: number; social: number; nature: number } {
   const bm = card.aiAnalysis?.businessModel;
-  const attack = ((bm?.valueProposition?.score || 0) + (bm?.valueArchitecture?.score || 0) + (bm?.contributions?.score || 0)) / 15 * 100;
-  
+  const strength = ((bm?.valueProposition?.score || 0) + (bm?.valueArchitecture?.score || 0) + (bm?.contributions?.score || 0)) / 15 * 100;
   const ff = card.aiAnalysis?.fiveForces;
   const threatSum = (ff?.newEntrants?.severity || 0) + (ff?.suppliers?.severity || 0) + (ff?.rivalry?.severity || 0) + (ff?.buyers?.severity || 0) + (ff?.substitutes?.severity || 0);
-  const defense = 100 - (threatSum / 50 * 100);
-  
+  const dynamism = threatSum / 50 * 100;
   const vrio = card.aiAnalysis?.vrio;
   const unique = ((vrio?.rare?.strength || 0) + (vrio?.inimitable?.strength || 0)) / 10 * 100;
 
-  // Default: Viking (Expand zone)
-  let icon = "🪓"; let title = "Viking"; let role = "expand";
-  let desc = "Aggressive scaler. Rapidly expanding into adjacent markets with high risk.";
-  let bg = "bg-rose-900 border-rose-500 text-rose-100 shadow-rose-500/20";
-  let text = "text-rose-300";
-
-  if (unique > 70 && attack > 70 && defense > 70) {
-    icon = "🗡️"; title = "Spartan"; role = "exploit";
-    desc = "Elite core. Dominates the existing market with unbreakable positioning across all dimensions.";
-    bg = "bg-amber-900 border-amber-500 text-amber-100 shadow-amber-500/20";
-    text = "text-amber-300";
-  } else if (defense > 65) {
-    icon = "🛡️"; title = "Legionnaire"; role = "exploit";
-    desc = "The Tank. Defends legacy cash flows and holds market share against massive competitive pressure.";
-    bg = "bg-slate-800 border-slate-500 text-slate-100 shadow-slate-500/20";
-    text = "text-slate-300";
-  } else if (attack >= 60 && defense < 65) {
-    icon = "🪓"; title = "Viking"; role = "expand";
-    desc = "Aggressive scaler. Rapidly expanding into adjacent markets with high risk and low structural defense.";
-    bg = "bg-rose-900 border-rose-500 text-rose-100 shadow-rose-500/20";
-    text = "text-rose-300";
-  } else if (unique > 60 && attack < 60) {
-    icon = "🥷"; title = "Ninja"; role = "explore";
-    desc = "Disruptive innovator. Bypasses direct competition entirely using rare, inimitable capabilities.";
-    bg = "bg-violet-900 border-violet-500 text-violet-100 shadow-violet-500/20";
-    text = "text-violet-300";
-  } else {
-    icon = "🧘‍♂️"; title = "Shaolin Monk"; role = "explore";
-    desc = "Deep R&D engine. Builds unique internal capabilities for future breakthroughs, not immediate revenue.";
-    bg = "bg-emerald-900 border-emerald-500 text-emerald-100 shadow-emerald-500/20";
-    text = "text-emerald-300";
-  }
-
-  return { title, icon, desc, attack, defense, unique, bg, text, role };
+  const core = Math.min(100, (strength * 0.6) + ((100 - dynamism) * 0.4));
+  const social = Math.min(100, (strength * 0.3) + (dynamism * 0.5) + (unique * 0.2));
+  const nature = Math.min(100, (unique * 0.5) + (dynamism * 0.3) + ((100 - strength) * 0.2));
+  return { core, social, nature };
 }
 
-function TacticalBattleMap({ cards }: { cards: HealthCard[] }) {
-  const party = cards.map(c => ({ name: c.ownerName || c.businessName, ...getWarriorArchetype(c) }));
+function getVennRegion(scores: { core: number; social: number; nature: number }): { region: VennRegion; primaryZone: StrategyZone } {
+  // Primary zone is simply the highest score
+  let primaryZone: StrategyZone = 'core';
+  if (scores.social > scores.core && scores.social > scores.nature) primaryZone = 'social';
+  else if (scores.nature > scores.core && scores.nature > scores.social) primaryZone = 'nature';
+
+  // Determine region label based on which scores are significant (>15% of total)
+  const total = scores.core + scores.social + scores.nature;
+  if (total === 0) return { region: 'core', primaryZone: 'core' };
+  const ratios = { core: scores.core / total, social: scores.social / total, nature: scores.nature / total };
+  const significant = { core: ratios.core > 0.25, social: ratios.social > 0.25, nature: ratios.nature > 0.25 };
+  const count = [significant.core, significant.social, significant.nature].filter(Boolean).length;
   
-  const exploit = party.filter(p => p.role === 'exploit');
-  const expand  = party.filter(p => p.role === 'expand');
-  const explore = party.filter(p => p.role === 'explore');
+  if (count === 3) return { region: 'all', primaryZone };
+  if (significant.core && significant.social) return { region: 'core-social', primaryZone };
+  if (significant.core && significant.nature) return { region: 'core-nature', primaryZone };
+  if (significant.social && significant.nature) return { region: 'social-nature', primaryZone };
+  return { region: primaryZone, primaryZone };
+}
 
-  // Formation analysis
-  const hasExploit = exploit.length > 0;
-  const hasExpand  = expand.length > 0;
-  const hasExplore = explore.length > 0;
-  const filledZones = [hasExploit, hasExpand, hasExplore].filter(Boolean).length;
+// Circle centers in the Venn diagram coordinate space (matches SVG viewBox 0-100 x 0-80)
+const VENN_CENTERS = {
+  social: { x: 32, y: 42 },
+  nature: { x: 62, y: 28 },
+  core:   { x: 62, y: 55 },
+};
 
-  let warning = "";
-  if (filledZones === 3) {
-    warning = "✅ AMBIDEXTROUS ORGANIZATION: Your portfolio spans all three horizons — core defense, aggressive scaling, and disruptive innovation.";
-  } else if (!hasExploit) {
-    warning = "⚠️ NO CORE DEFENDERS: Your portfolio has zero Exploitation power. Without a defended cash engine, your Expand and Explore initiatives have no funding source.";
-  } else if (!hasExplore) {
-    warning = "⚠️ INNOVATION GAP: Your portfolio has zero Exploration. You are optimizing the present but not investing in the future. Disruption risk is critical.";
-  } else if (!hasExpand) {
-    warning = "⚠️ SCALING GAP: You have core defense and R&D — but nobody aggressively scaling winning ideas into adjacent markets.";
-  } else {
-    warning = "✅ SOLID FORMATION: You cover " + filledZones + " of 3 strategic horizons.";
-  }
+function getWeightedPosition(scores: { core: number; social: number; nature: number }, cardIndex: number): { x: number; y: number } {
+  // Square the scores to exaggerate dominant domain — pushes cards away from center
+  const sq = { core: scores.core ** 2, social: scores.social ** 2, nature: scores.nature ** 2 };
+  const total = sq.core + sq.social + sq.nature;
+  if (total === 0) return VENN_CENTERS.core;
 
-  const renderToken = (p: any, i: number) => (
-    <div key={i} className={clsx("w-40 p-3 rounded-xl border-2 flex flex-col items-center text-center transition-all duration-300 hover:scale-105 shadow-xl relative group z-20", p.bg)}>
-      <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-950 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-white shadow-xl z-30">
-         {Math.round((p.attack + p.defense + p.unique) / 3)}
-      </div>
-      <div className="text-3xl mb-1 drop-shadow-md">{p.icon}</div>
-      <h4 className="font-extrabold text-[12px] truncate w-full text-white mb-0.5">{p.name}</h4>
-      <span className={clsx("text-[9px] font-black uppercase tracking-widest", p.text)}>{p.title}</span>
-      
-      {/* Tooltip on hover */}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-2 rounded-lg bg-slate-900 border border-slate-700 text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-2xl">
-         {p.desc}
-      </div>
-      
-      <div className="w-full mt-3 space-y-1.5 px-1 pb-1">
-         <div>
-            <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-0.5"><span>ATK ⚔️</span><span>{Math.round(p.attack)}</span></div>
-            <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{width: `${p.attack}%`}}/></div>
-         </div>
-         <div>
-            <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-0.5"><span>DEF 🛡️</span><span>{Math.round(p.defense)}</span></div>
-            <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{width: `${p.defense}%`}}/></div>
-         </div>
-         <div>
-            <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-0.5"><span>MGC 🪄</span><span>{Math.round(p.unique)}</span></div>
-            <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden"><div className="h-full bg-violet-500" style={{width: `${p.unique}%`}}/></div>
-         </div>
-      </div>
-    </div>
-  );
+  // Weighted centroid of the three circle centers
+  const wx = (sq.core * VENN_CENTERS.core.x + sq.social * VENN_CENTERS.social.x + sq.nature * VENN_CENTERS.nature.x) / total;
+  const wy = (sq.core * VENN_CENTERS.core.y + sq.social * VENN_CENTERS.social.y + sq.nature * VENN_CENTERS.nature.y) / total;
 
+  // Deterministic jitter using golden angle for even spread
+  const angle = (cardIndex * 137.508) * (Math.PI / 180);
+  const radius = 5 + (cardIndex % 4) * 3;
+  const jx = Math.cos(angle) * radius;
+  const jy = Math.sin(angle) * radius;
+
+  return { x: Math.max(5, Math.min(92, wx + jx)), y: Math.max(5, Math.min(78, wy + jy)) };
+}
+
+const ZONE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  core:   { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
+  social: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300' },
+  nature: { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300' },
+};
+
+function getStrategicHorizon(card: HealthCard): { zone: StrategyZone; strength: number; dynamism: number; label: string } {
+  const scores = getValueScores(card);
+  const { primaryZone } = getVennRegion(scores);
+  const bm = card.aiAnalysis?.businessModel;
+  const strength = ((bm?.valueProposition?.score || 0) + (bm?.valueArchitecture?.score || 0) + (bm?.contributions?.score || 0)) / 15 * 100;
+  const ff = card.aiAnalysis?.fiveForces;
+  const threatSum = (ff?.newEntrants?.severity || 0) + (ff?.suppliers?.severity || 0) + (ff?.rivalry?.severity || 0) + (ff?.buyers?.severity || 0) + (ff?.substitutes?.severity || 0);
+  const dynamism = threatSum / 50 * 100;
+  const labels: Record<StrategyZone, string> = { core: 'Core Value', social: 'Social Value', nature: 'Nature Value' };
+  return { zone: primaryZone, strength, dynamism, label: labels[primaryZone] };
+}
+
+// ── Zone Chat Component ──
+function ZoneChat({ zone, cards, chatMessages, addZoneChatMessage }: {
+  zone: StrategyZone; cards: HealthCard[]; chatMessages: ChatMessage[];
+  addZoneChatMessage: (zone: StrategyZone, msg: ChatMessage) => Promise<void>;
+}) {
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  const prevZoneMsgCount = useRef(chatMessages.length);
+  useEffect(() => {
+    if (chatMessages.length > prevZoneMsgCount.current) {
+      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    prevZoneMsgCount.current = chatMessages.length;
+  }, [chatMessages.length]);
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const msg = input.trim(); setInput("");
+    const zoneDivisions = cards.map(c => `${c.ownerName} (${c.businessName})`).join(', ');
+    const userMsg: ChatMessage = { role: "user", parts: [{ text: msg }], timestamp: new Date().toISOString() };
+    await addZoneChatMessage(zone, userMsg); setLoading(true);
+    try {
+      const res = await fetch("/api/constellation", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cards, action: "chat", message: msg, zone, zoneDivisions, chatHistory: [...chatMessages, userMsg].slice(-16) }),
+      });
+      const data = await res.json();
+      await addZoneChatMessage(zone, { role: "model", parts: [{ text: data.text || "I couldn't generate a response." }], timestamp: new Date().toISOString() });
+    } catch {
+      await addZoneChatMessage(zone, { role: "model", parts: [{ text: "Error communicating with the AI." }], timestamp: new Date().toISOString() });
+    }
+    setLoading(false);
+  };
+
+  const zoneLabels: Record<StrategyZone, string> = { core: 'Core Value', social: 'Social Value', nature: 'Nature Value' };
   return (
-    <div className="space-y-4">
-      {/* Warning Banner */}
-      <div className={clsx("p-3 rounded-xl border flex gap-3 text-xs font-medium shadow-sm w-full", 
-        warning.startsWith("✅") ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"
-      )}>
-        <span className="flex-1 text-center font-bold">{warning}</span>
+    <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
+        <h5 className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><MessageCircle className="h-3.5 w-3.5" /> {zoneLabels[zone]} Discussion</h5>
       </div>
-
-      {/* AMBIDEXTROUS STRATEGY MAP */}
-      <div className="relative w-full rounded-3xl overflow-hidden border-[6px] border-slate-900 bg-slate-950 shadow-2xl flex flex-col mt-6">
-        {/* Dot Grid Background pattern */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
-
-        {/* ── EXPLOIT ZONE ── */}
-        <div className="relative border-b-2 border-dashed border-slate-800/60 py-8 px-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30">
-              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-400">🏰 Exploit</span>
+      <div className="max-h-[240px] overflow-y-auto p-3 space-y-2">
+        {chatMessages.length === 0 && (
+          <div className="text-center py-4 text-slate-400">
+            <Sparkles className="h-5 w-5 mx-auto mb-1 text-indigo-300" />
+            <p className="text-xs">Ask about this value domain.</p>
+          </div>
+        )}
+        {chatMessages.map((m, i) => (
+          <div key={i} className={clsx("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+            <div className={clsx("max-w-[85%] rounded-2xl px-3 py-2 text-sm",
+              m.role === "user" ? "bg-indigo-600 text-white rounded-br-md" : "bg-slate-100 text-slate-800 rounded-bl-md"
+            )}>
+              {m.role === "model" ? (
+                <div className="prose prose-sm prose-slate max-w-none [&>p]:my-1 [&>ul]:my-1"><ReactMarkdown>{m.parts[0].text}</ReactMarkdown></div>
+              ) : <p>{m.parts[0].text}</p>}
             </div>
-            <span className="text-[10px] text-slate-500 font-medium">Defend core cash flows · Maximize efficiency · Hold market share</span>
           </div>
-          <div className="flex justify-center flex-wrap gap-4 min-h-[120px] items-center">
-            {exploit.length > 0 ? exploit.map((p, i) => renderToken(p, i)) : (
-              <div className="flex flex-col items-center gap-1 py-6">
-                <span className="text-rose-500/60 text-xs font-bold">⚠️ EMPTY ZONE</span>
-                <span className="text-slate-600 text-[10px]">No divisions defending the core</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── EXPAND ZONE ── */}
-        <div className="relative border-b-2 border-dashed border-slate-800/60 py-8 px-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/30">
-              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-400">🪓 Expand</span>
-            </div>
-            <span className="text-[10px] text-slate-500 font-medium">Scale winning ideas · Adjacent markets · Aggressive growth</span>
-          </div>
-          <div className="flex justify-center flex-wrap gap-4 min-h-[120px] items-center">
-            {expand.length > 0 ? expand.map((p, i) => renderToken(p, i)) : (
-              <div className="flex flex-col items-center gap-1 py-6">
-                <span className="text-amber-500/60 text-xs font-bold">⚠️ EMPTY ZONE</span>
-                <span className="text-slate-600 text-[10px]">No divisions aggressively scaling</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── EXPLORE ZONE ── */}
-        <div className="relative py-8 px-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="px-3 py-1.5 rounded-lg bg-violet-500/20 border border-violet-500/30">
-              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-violet-400">🌌 Explore</span>
-            </div>
-            <span className="text-[10px] text-slate-500 font-medium">Disruptive innovation · Blue Ocean search · Deep R&D</span>
-          </div>
-          <div className="flex justify-center flex-wrap gap-4 min-h-[120px] items-center">
-            {explore.length > 0 ? explore.map((p, i) => renderToken(p, i)) : (
-              <div className="flex flex-col items-center gap-1 py-6">
-                <span className="text-violet-500/60 text-xs font-bold">⚠️ EMPTY ZONE</span>
-                <span className="text-slate-600 text-[10px]">No divisions investing in the future</span>
-              </div>
-            )}
-          </div>
-        </div>
-
+        ))}
+        {loading && (<div className="flex justify-start"><div className="bg-slate-100 rounded-2xl px-4 py-3 rounded-bl-md"><Loader2 className="h-4 w-4 animate-spin text-indigo-500" /></div></div>)}
+        <div ref={endRef} />
+      </div>
+      <div className="p-2 border-t border-slate-100 flex gap-2">
+        <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder="Ask about this domain..." className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <button onClick={send} disabled={loading || !input.trim()} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+          <Send className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   );
 }
 
-function Level2Patterns({ data, cards, onSelectTension }: { data: PatternData; cards: HealthCard[]; onSelectTension: (tension: string) => void }) {
-  const exploit = data.exploitInsights || [];
-  const explore = data.exploreInsights || [];
+// ── Level 2: SWOT Pattern Discovery ──
+type SwotCategory = 'strengths' | 'weaknesses' | 'opportunities' | 'threats';
+
+const SWOT_CONFIG: Record<SwotCategory, { icon: string; label: string; color: string; bgColor: string; borderColor: string; question: string }> = {
+  strengths:     { icon: '💪', label: 'Common Strengths', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', question: 'Which of these shared strengths could become our collective competitive moat — and which are we taking for granted?' },
+  weaknesses:    { icon: '🔍', label: 'Shared Weaknesses', color: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200', question: 'If competitors attacked our weakest point simultaneously, which shared vulnerability would hurt us all the most?' },
+  opportunities: { icon: '🚀', label: 'Converging Opportunities', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', question: 'Which opportunity could 3+ divisions pursue together — and what would that cross-divisional initiative look like?' },
+  threats:       { icon: '⚡', label: 'Common Threats', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', question: 'Which threat is already closer than we think — and what early warning signs should we be watching for?' },
+};
+
+// Map SWOT categories to zones for chat persistence
+const swotToZone = (cat: SwotCategory): StrategyZone => {
+  switch (cat) {
+    case 'strengths': return 'core';
+    case 'weaknesses': return 'social';
+    case 'opportunities': return 'nature';
+    case 'threats': return 'core'; // shares with strengths — TODO: extend StrategyZone if needed
+  }
+};
+
+// ── SWOT Chat Component ──
+function SwotChat({ category, cards, aggregatedPoints, chatMessages, addZoneChatMessage }: {
+  category: SwotCategory;
+  cards: HealthCard[];
+  aggregatedPoints: { point: string; owner: string; business: string }[];
+  chatMessages: ChatMessage[];
+  addZoneChatMessage: (zone: StrategyZone, msg: ChatMessage) => Promise<void>;
+}) {
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  const prevMsgCount = useRef(chatMessages.length);
+  useEffect(() => {
+    // Only scroll when new messages are added, not on category switch
+    if (chatMessages.length > prevMsgCount.current) {
+      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    prevMsgCount.current = chatMessages.length;
+  }, [chatMessages.length]);
+
+  const zone = swotToZone(category);
+  const config = SWOT_CONFIG[category];
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const msg = input.trim(); setInput("");
+    const swotContext = aggregatedPoints.slice(0, 10).map(p => `[${p.business}] ${p.point}`).join('\n');
+    const userMsg: ChatMessage = { role: "user", parts: [{ text: msg }], timestamp: new Date().toISOString() };
+    await addZoneChatMessage(zone, userMsg); setLoading(true);
+    try {
+      const res = await fetch("/api/constellation", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cards, action: "chat", zone,
+          message: `[SWOT ${category.toUpperCase()} Discussion]\n\nShared ${category} across divisions:\n${swotContext}\n\nUser question: ${msg}`,
+          zoneDivisions: cards.map(c => c.businessName).join(', '),
+          chatHistory: [...chatMessages, userMsg].slice(-16)
+        }),
+      });
+      const data = await res.json();
+      await addZoneChatMessage(zone, { role: "model", parts: [{ text: data.text || "I couldn't generate a response." }], timestamp: new Date().toISOString() });
+    } catch {
+      await addZoneChatMessage(zone, { role: "model", parts: [{ text: "Error communicating with the AI." }], timestamp: new Date().toISOString() });
+    }
+    setLoading(false);
+  };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto pb-20">
+    <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
+        <h5 className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+          <MessageCircle className="h-3.5 w-3.5" /> {config.icon} Discuss {config.label}
+        </h5>
+      </div>
+      <div className="max-h-[280px] overflow-y-auto p-3 space-y-2">
+        {chatMessages.length === 0 && (
+          <div className="text-center py-4 text-slate-400">
+            <Sparkles className="h-5 w-5 mx-auto mb-1 text-indigo-300" />
+            <p className="text-xs">Ask the AI to challenge your thinking on these shared {category}.</p>
+            <p className="text-[10px] text-slate-300 mt-1">e.g. &ldquo;What are we missing?&rdquo; or &ldquo;How might this be a blind spot?&rdquo;</p>
+          </div>
+        )}
+        {chatMessages.map((m, i) => (
+          <div key={i} className={clsx("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+            <div className={clsx("max-w-[85%] rounded-2xl px-3 py-2 text-sm",
+              m.role === "user" ? "bg-indigo-600 text-white rounded-br-md" : "bg-slate-100 text-slate-800 rounded-bl-md"
+            )}>
+              {m.role === "model" ? (
+                <div className="prose prose-sm prose-slate max-w-none [&>p]:my-1 [&>ul]:my-1"><ReactMarkdown>{m.parts[0].text}</ReactMarkdown></div>
+              ) : <p>{m.parts[0].text}</p>}
+            </div>
+          </div>
+        ))}
+        {loading && (<div className="flex justify-start"><div className="bg-slate-100 rounded-2xl px-4 py-3 rounded-bl-md"><Loader2 className="h-4 w-4 animate-spin text-indigo-500" /></div></div>)}
+        <div ref={endRef} />
+      </div>
+      <div className="p-2 border-t border-slate-100 flex gap-2">
+        <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder={`Challenge our ${category} analysis...`} className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <button onClick={send} disabled={loading || !input.trim()} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+          <Send className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Level2Patterns({ data, cards, onSelectTension, zoneChatMessages, addZoneChatMessage, savedClusters, savedTranslations, saveSwotAnalysis }: {
+  data: PatternData; cards: HealthCard[]; onSelectTension: (tension: string) => void;
+  zoneChatMessages?: Record<StrategyZone, ChatMessage[]>;
+  addZoneChatMessage: (zone: StrategyZone, msg: ChatMessage) => Promise<void>;
+  savedClusters?: Record<string, any[]>;
+  savedTranslations?: Record<string, string>;
+  saveSwotAnalysis: (clusters: Record<string, any[]>, translations: Record<string, string>) => Promise<void>;
+}) {
+  const [activeCategory, setActiveCategory] = useState<SwotCategory>('strengths');
+  const [translations, setTranslations] = useState<Record<string, string>>(savedTranslations || {});
+  const [translating, setTranslating] = useState(false);
+
+  // Aggregate SWOT points across all members
+  const aggregated: Record<SwotCategory, { point: string; owner: string; business: string }[]> = {
+    strengths: [], weaknesses: [], opportunities: [], threats: [],
+  };
+
+  for (const card of cards) {
+    for (const cat of ['strengths', 'weaknesses', 'opportunities', 'threats'] as SwotCategory[]) {
+      const points = card.swot?.[cat]?.points || [];
+      for (const point of points) {
+        if (point.trim()) {
+          aggregated[cat].push({ point: point.trim(), owner: card.ownerName, business: card.businessName });
+        }
+      }
+    }
+  }
+
+  // Auto-translate non-English points
+  const isNonEnglish = (text: string) => /[\u3000-\u9fff\u4e00-\u9fff\uf900-\ufaff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(text);
+
+  useEffect(() => {
+    const allPoints = aggregated[activeCategory];
+    const needsTranslation = allPoints.filter(p => isNonEnglish(p.point) && !translations[p.point]);
+    if (needsTranslation.length === 0 || translating) return;
+
+    const doTranslate = async () => {
+      setTranslating(true);
+      try {
+        const pointsToTranslate = needsTranslation.map(p => p.point);
+        const res = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ points: pointsToTranslate, targetLanguage: 'en', sourceLanguage: 'ja' }),
+        });
+        const d = await res.json();
+        if (d.translated && d.translated.length === pointsToTranslate.length) {
+          const newT = { ...translations };
+          pointsToTranslate.forEach((orig, i) => { newT[orig] = d.translated[i]; });
+          setTranslations(newT);
+          // Persist translations to Firebase
+          const toSaveClusters: Record<string, any[]> = {};
+          for (const [k, v] of Object.entries(aiClusters)) {
+            toSaveClusters[k] = v.map(c => ({ title: c.title, description: c.description, pointIndices: c.pointIndices }));
+          }
+          if (Object.keys(toSaveClusters).length > 0) saveSwotAnalysis(toSaveClusters, newT);
+        }
+      } catch (e) { console.error('Translation failed:', e); }
+      setTranslating(false);
+    };
+    doTranslate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory]);
+
+  // Group similar points (simple keyword matching for common themes)
+  const findCommonThemes = (items: typeof aggregated.strengths): { theme: string; sources: { owner: string; business: string; point: string }[]; count: number }[] => {
+    if (items.length === 0) return [];
+    const themes: { theme: string; sources: typeof items; count: number }[] = [];
+    const used = new Set<number>();
+
+    for (let i = 0; i < items.length; i++) {
+      if (used.has(i)) continue;
+      const group = [items[i]];
+      used.add(i);
+      const words = items[i].point.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+
+      for (let j = i + 1; j < items.length; j++) {
+        if (used.has(j)) continue;
+        const matchWords = items[j].point.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+        const overlap = words.filter(w => matchWords.some(mw => mw.includes(w) || w.includes(mw)));
+        if (overlap.length >= 1 || items[i].point.toLowerCase().includes(items[j].point.toLowerCase().substring(0, 15))) {
+          group.push(items[j]);
+          used.add(j);
+        }
+      }
+
+      themes.push({
+        theme: group.length > 1 ? group[0].point.substring(0, 60) + (group[0].point.length > 60 ? '...' : '') : group[0].point,
+        sources: group,
+        count: group.length,
+      });
+    }
+
+    return themes.sort((a, b) => b.count - a.count);
+  };
+
+  const themes = findCommonThemes(aggregated[activeCategory]);
+  const multiMemberThemes = themes.filter(t => t.count > 1);
+  const singleThemes = themes.filter(t => t.count === 1);
+
+  // AI-based clustering (for the detail view) — persisted to Firebase
+  type AICluster = { title: string; description: string; pointIndices: number[]; sources: { point: string; owner: string; business: string }[] };
+
+  // Rebuild sources from saved cluster data (pointIndices → actual items)
+  const rebuildClusters = (saved: Record<string, any[]>): Record<string, AICluster[]> => {
+    const result: Record<string, AICluster[]> = {};
+    for (const cat of Object.keys(saved)) {
+      const items = aggregated[cat as SwotCategory] || [];
+      result[cat] = saved[cat].map((c: any) => ({
+        ...c,
+        sources: (c.pointIndices || []).map((idx: number) => items[idx]).filter(Boolean),
+      }));
+    }
+    return result;
+  };
+
+  const [aiClusters, setAiClusters] = useState<Record<string, AICluster[]>>(
+    savedClusters ? rebuildClusters(savedClusters) : {}
+  );
+  const [clustering, setClustering] = useState(false);
+
+  // Pre-fetch clusters for ALL categories on mount (only if not already saved)
+  useEffect(() => {
+    const categories: SwotCategory[] = ['strengths', 'weaknesses', 'opportunities', 'threats'];
+    const needsFetch = categories.filter(cat => {
+      const items = aggregated[cat];
+      return items.length > 0 && !aiClusters[cat];
+    });
+    if (needsFetch.length === 0) return;
+
+    const fetchAll = async () => {
+      const newClusters: Record<string, AICluster[]> = { ...aiClusters };
+      let changed = false;
+
+      await Promise.allSettled(needsFetch.map(async cat => {
+        const items = aggregated[cat];
+        try {
+          const res = await fetch('/api/constellation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cards, action: 'cluster-swot', category: cat,
+              points: items.map(p => ({ point: p.point, business: p.business })),
+            }),
+          });
+          const data = await res.json();
+          if (data.clusters && data.clusters.length > 0) {
+            newClusters[cat] = data.clusters.map((c: any) => ({
+              ...c,
+              sources: (c.pointIndices || []).map((idx: number) => items[idx]).filter(Boolean),
+            }));
+            changed = true;
+          }
+        } catch {}
+      }));
+
+      if (changed) {
+        setAiClusters(newClusters);
+        // Save to Firebase (strip sources to save space, keep pointIndices)
+        const toSave: Record<string, any[]> = {};
+        for (const [k, v] of Object.entries(newClusters)) {
+          toSave[k] = v.map(c => ({ title: c.title, description: c.description, pointIndices: c.pointIndices }));
+        }
+        saveSwotAnalysis(toSave, translations);
+      }
+    };
+    fetchAll();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch for active category (handles retry if initial fetch failed)
+  useEffect(() => {
+    const items = aggregated[activeCategory];
+    if (items.length === 0 || aiClusters[activeCategory]) { setClustering(false); return; }
+
+    const fetchClusters = async () => {
+      setClustering(true);
+      try {
+        const res = await fetch('/api/constellation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cards, action: 'cluster-swot', category: activeCategory,
+            points: items.map(p => ({ point: p.point, business: p.business })),
+          }),
+        });
+        const data = await res.json();
+        if (data.clusters && data.clusters.length > 0) {
+          const enriched = data.clusters.map((c: any) => ({
+            ...c,
+            sources: (c.pointIndices || []).map((idx: number) => items[idx]).filter(Boolean),
+          }));
+          setAiClusters(prev => {
+            const updated = { ...prev, [activeCategory]: enriched };
+            // Save to Firebase
+            const toSave: Record<string, any[]> = {};
+            for (const [k, v] of Object.entries(updated)) {
+              toSave[k] = v.map((c: AICluster) => ({ title: c.title, description: c.description, pointIndices: c.pointIndices }));
+            }
+            saveSwotAnalysis(toSave, translations);
+            return updated;
+          });
+        } else {
+          console.warn('SWOT clustering returned empty:', data);
+        }
+      } catch (e) { console.error('Clustering failed:', e); }
+      setClustering(false);
+    };
+    fetchClusters();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory]);
+
+  const currentClusters = aiClusters[activeCategory] || [];
+
+  // Get preview items for a category: AI titles if available, else keyword fallback
+  const getPreview = (cat: SwotCategory) => {
+    const clusters = aiClusters[cat];
+    if (clusters && clusters.length > 0) {
+      return clusters.slice(0, 3).map(c => ({ label: c.title, count: c.sources.length }));
+    }
+    return findCommonThemes(aggregated[cat]).slice(0, 3).map(t => ({ label: t.theme, count: t.count }));
+  };
+
+  const config = SWOT_CONFIG[activeCategory];
+
+  return (
+    <div className="space-y-6 max-w-4xl mx-auto pb-20">
       <div className="text-center">
-        <h3 className="text-2xl font-bold text-slate-800 mb-2">Ambidextrous Strategy Map</h3>
+        <h3 className="text-2xl font-bold text-slate-800 mb-2">Pattern Discovery</h3>
         <p className="text-sm text-slate-500 max-w-xl mx-auto">
-           Your divisions are warriors. The AI analyzed their scores and mapped them across 3 strategic horizons: <strong>Exploit</strong> (defend the core), <strong>Expand</strong> (scale aggressively), and <strong>Explore</strong> (disrupt the future).
+          Exploring common patterns across {cards.length} divisions through SWOT analysis. Where do we share strengths? Where are our collective blind spots?
         </p>
       </div>
 
-      <div className="w-full">
-        <TacticalBattleMap cards={cards} />
+      {/* ── SWOT 2×2 Matrix ── */}
+      <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
+        {/* Top axis */}
+        <div className="grid grid-cols-2 border-b border-slate-200">
+          <div className="py-1.5 text-center text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-slate-50">Helpful</div>
+          <div className="py-1.5 text-center text-[10px] font-black text-red-500 uppercase tracking-widest bg-slate-50 border-l border-slate-200">Harmful</div>
+        </div>
+
+        {/* Internal Row */}
+        <div className="relative">
+          <div className="absolute left-0 top-0 bottom-0 w-0 flex items-center z-10">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest [writing-mode:vertical-lr] rotate-180 -ml-0.5">Internal</span>
+          </div>
+          <div className="grid grid-cols-2 border-b border-slate-200">
+            {/* S */}
+            <button onClick={() => setActiveCategory('strengths')}
+              className={clsx("p-4 pl-5 text-left transition-all hover:bg-emerald-50",
+                activeCategory === 'strengths' && "bg-emerald-50 ring-2 ring-inset ring-emerald-400"
+              )}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">💪</span>
+                <span className="text-sm font-black text-emerald-700">Strengths</span>
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold">{aggregated.strengths.length}</span>
+              </div>
+              <div className="space-y-1">
+                {getPreview('strengths').map((t, i) => (
+                  <div key={i} className="text-[11px] text-slate-600 truncate flex items-center gap-1">
+                    {t.count > 1 && <span className="w-4 h-4 rounded-full bg-emerald-200 text-emerald-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">{t.count}</span>}
+                    <span className="truncate">{t.label}</span>
+                  </div>
+                ))}
+              </div>
+            </button>
+            {/* W */}
+            <button onClick={() => setActiveCategory('weaknesses')}
+              className={clsx("p-4 text-left transition-all hover:bg-red-50 border-l border-slate-200",
+                activeCategory === 'weaknesses' && "bg-red-50 ring-2 ring-inset ring-red-400"
+              )}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🔍</span>
+                <span className="text-sm font-black text-red-700">Weaknesses</span>
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">{aggregated.weaknesses.length}</span>
+              </div>
+              <div className="space-y-1">
+                {getPreview('weaknesses').map((t, i) => (
+                  <div key={i} className="text-[11px] text-slate-600 truncate flex items-center gap-1">
+                    {t.count > 1 && <span className="w-4 h-4 rounded-full bg-red-200 text-red-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">{t.count}</span>}
+                    <span className="truncate">{t.label}</span>
+                  </div>
+                ))}
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* External Row */}
+        <div className="relative">
+          <div className="absolute left-0 top-0 bottom-0 w-0 flex items-center z-10">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest [writing-mode:vertical-lr] rotate-180 -ml-0.5">External</span>
+          </div>
+          <div className="grid grid-cols-2">
+            {/* O */}
+            <button onClick={() => setActiveCategory('opportunities')}
+              className={clsx("p-4 pl-5 text-left transition-all hover:bg-blue-50",
+                activeCategory === 'opportunities' && "bg-blue-50 ring-2 ring-inset ring-blue-400"
+              )}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🚀</span>
+                <span className="text-sm font-black text-blue-700">Opportunities</span>
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">{aggregated.opportunities.length}</span>
+              </div>
+              <div className="space-y-1">
+                {getPreview('opportunities').map((t, i) => (
+                  <div key={i} className="text-[11px] text-slate-600 truncate flex items-center gap-1">
+                    {t.count > 1 && <span className="w-4 h-4 rounded-full bg-blue-200 text-blue-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">{t.count}</span>}
+                    <span className="truncate">{t.label}</span>
+                  </div>
+                ))}
+              </div>
+            </button>
+            {/* T */}
+            <button onClick={() => setActiveCategory('threats')}
+              className={clsx("p-4 text-left transition-all hover:bg-amber-50 border-l border-slate-200",
+                activeCategory === 'threats' && "bg-amber-50 ring-2 ring-inset ring-amber-400"
+              )}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">⚡</span>
+                <span className="text-sm font-black text-amber-700">Threats</span>
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">{aggregated.threats.length}</span>
+              </div>
+              <div className="space-y-1">
+                {getPreview('threats').map((t, i) => (
+                  <div key={i} className="text-[11px] text-slate-600 truncate flex items-center gap-1">
+                    {t.count > 1 && <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">{t.count}</span>}
+                    <span className="truncate">{t.label}</span>
+                  </div>
+                ))}
+              </div>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Team Narrative */}
-      {data.teamNarrative && (
-        <div className="bg-gradient-to-r from-slate-800 to-indigo-900 rounded-2xl p-6 shadow-md text-white">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="h-5 w-5 text-indigo-300" />
-            <h4 className="text-sm font-bold text-indigo-100 uppercase tracking-wider">The Dungeon Master's Assessment</h4>
+      {/* Category Header + Coaching Question */}
+      <div className={clsx("rounded-2xl border-2 overflow-hidden", config.bgColor, config.borderColor)}>
+        <div className="px-6 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl">{config.icon}</span>
+            <h4 className={clsx("text-lg font-black", config.color)}>{config.label}</h4>
+            <span className="text-xs text-slate-400 ml-auto">{aggregated[activeCategory].length} total points</span>
           </div>
-          <p className="text-sm leading-relaxed text-indigo-50">{data.teamNarrative}</p>
+          <div className="bg-white/60 rounded-xl p-4 border border-white/80">
+            <div className="flex items-start gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-1">Coaching Question</p>
+                <p className="text-sm font-medium text-slate-800 leading-relaxed italic">&ldquo;{config.question}&rdquo;</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Participant Contributions ── */}
+      {clustering && (
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Participant Contributions
+              <span className="text-xs font-normal text-slate-400 ml-auto flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
+                AI is analyzing...
+              </span>
+            </h4>
+          </div>
+          <div className="px-6 py-6 space-y-4">
+            <div className="flex items-center gap-3 justify-center text-slate-500">
+              <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
+              <span className="text-sm font-medium">Grouping contributions by theme across divisions...</span>
+            </div>
+            {/* Skeleton placeholders */}
+            {[1, 2, 3].map(i => (
+              <div key={i} className="animate-pulse">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-5 h-5 rounded-full bg-slate-200" />
+                  <div className="h-3 w-40 bg-slate-200 rounded" />
+                </div>
+                <div className="ml-7 space-y-2">
+                  <div className="bg-slate-100 rounded-lg p-3 border border-slate-50">
+                    <div className="h-3 w-full bg-slate-200 rounded mb-2" />
+                    <div className="h-3 w-3/4 bg-slate-200 rounded mb-2" />
+                    <div className="h-2 w-28 bg-slate-200 rounded" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Discoveries */}
-      <div>
-        <h4 className="text-lg font-bold text-slate-800 mb-4">Hidden Patterns from Coaching Chats</h4>
-        <div className="grid grid-cols-2 gap-6">
-          {/* Exploit */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-rose-100 rounded text-rose-600"><AlertTriangle className="h-4 w-4" /></div>
-              <h5 className="font-bold text-slate-800">"Exploit" Opportunities</h5>
-            </div>
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Shared vulnerabilities & redundant resources</p>
-            {exploit.length > 0 ? exploit.map((inc: any, i: number) => (
-              <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-rose-300 transition-colors">
-                <span className="text-sm font-bold text-rose-700">{inc.title}</span>
-                <p className="text-xs text-slate-600 mt-2">{inc.description}</p>
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {inc.divisions?.map((d: string) => <span key={d} className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-medium">{d}</span>)}
+      {!clustering && currentClusters.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Participant Contributions
+              <span className="text-xs font-normal text-slate-400 ml-auto">
+                {aggregated[activeCategory].length} individual points
+                {translating && (
+                  <span className="inline-flex items-center gap-1 ml-1.5 text-indigo-500">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    translating...
+                  </span>
+                )}
+              </span>
+            </h4>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {currentClusters.map((cluster, ci) => (
+              <div key={ci} className="px-6 py-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className={clsx("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black",
+                    activeCategory === 'strengths' ? 'bg-emerald-100 text-emerald-600' :
+                    activeCategory === 'weaknesses' ? 'bg-red-100 text-red-600' :
+                    activeCategory === 'opportunities' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'
+                  )}>
+                    {cluster.sources.length}
+                  </div>
+                  <h5 className="text-xs font-bold text-slate-600 uppercase tracking-wider">{cluster.title}</h5>
+                </div>
+                <div className="space-y-3 ml-7">
+                  {cluster.sources.map((s, si) => {
+                    const hasTranslation = isNonEnglish(s.point) && translations[s.point];
+                    return (
+                      <div key={si} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                        <p className={clsx("text-sm leading-relaxed", hasTranslation ? "text-slate-700" : "text-slate-800")}>
+                          {s.point}
+                        </p>
+                        {hasTranslation && (
+                          <p className="text-xs text-indigo-600 mt-1.5 leading-relaxed pl-3 border-l-2 border-indigo-200">
+                            {translations[s.point]}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-slate-400 mt-2 font-medium">{s.business} &mdash; {s.owner}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            )) : <p className="text-xs text-slate-400 italic">No exploit patterns found.</p>}
+            ))}
           </div>
+        </div>
+      )}
 
-          {/* Explore */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 bg-emerald-100 rounded text-emerald-600"><Rocket className="h-4 w-4" /></div>
-              <h5 className="font-bold text-slate-800">"Explore" Opportunities</h5>
-            </div>
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Hidden synergies & combinations</p>
-            {explore.length > 0 ? explore.map((inc: any, i: number) => (
-              <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-emerald-300 transition-colors">
-                <span className="text-sm font-bold text-emerald-700">{inc.title}</span>
-                <p className="text-xs text-slate-600 mt-2">{inc.description}</p>
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {inc.divisions?.map((d: string) => <span key={d} className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-md font-medium">{d}</span>)}
-                </div>
-              </div>
-            )) : <p className="text-xs text-slate-400 italic">No explore patterns found.</p>}
-          </div>
+      {aggregated[activeCategory].length === 0 && (
+        <div className="text-center py-8 text-slate-400">
+          <p className="text-sm">No {activeCategory} data available yet. Complete the SWOT analysis first.</p>
+        </div>
+      )}
+
+      {/* ── Thinking Partner Chat ── */}
+      <div className={clsx("rounded-2xl border-2 overflow-hidden", config.bgColor, config.borderColor)}>
+        <div className="px-6 py-4">
+          <SwotChat
+            key={activeCategory}
+            category={activeCategory}
+            cards={cards}
+            aggregatedPoints={aggregated[activeCategory]}
+            chatMessages={zoneChatMessages?.[swotToZone(activeCategory)] || []}
+            addZoneChatMessage={addZoneChatMessage}
+          />
         </div>
       </div>
 
-      {/* Sense-Making Input */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 mt-8">
-        <h4 className="text-sm font-bold text-indigo-900 mb-2">What do you see?</h4>
-        <p className="text-xs text-indigo-700 mb-4">Which of these patterns is the most critical strategic tension for the portfolio? Discuss in the team chat and select one to map into a project.</p>
-        <div className="flex gap-4">
-          <button 
-            onClick={() => onSelectTension(exploit?.[0]?.title || "Exploit opportunity based on shared vulnerabilities")}
-            className="flex-1 py-3 px-4 bg-white border border-indigo-200 rounded-xl text-sm font-medium text-indigo-900 hover:bg-indigo-100 transition-colors shadow-sm"
-          >
-            Vote: Top Exploit Pattern
-          </button>
-          <button 
-            onClick={() => onSelectTension(explore?.[0]?.title || "Explore opportunity based on hidden synergies")}
-            className="flex-1 py-3 px-4 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            Vote: Top Explore Pattern
-          </button>
-        </div>
-      </div>
+
     </div>
   );
 }
+
+
 
 // ═══════════════════════════════════════
 // LEVEL 3: Strategic Synthesis

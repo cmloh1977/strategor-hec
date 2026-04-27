@@ -176,6 +176,59 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Need at least 2 team cards" }, { status: 400 });
     }
 
+    // ── SWOT Clustering: fast path (no chat history needed) ──
+    if (action === 'cluster-swot') {
+      const { points, category } = body;
+      if (!points || !Array.isArray(points) || points.length === 0) {
+        return NextResponse.json({ clusters: [] });
+      }
+
+      const numbered = points.map((p: { point: string; business: string }, i: number) => 
+        `${i}. [${p.business}] ${p.point}`
+      ).join('\n');
+
+      const clusterPrompt = `You are analyzing ${category.toUpperCase()} from multiple business divisions.
+Group these points into thematic clusters based on MEANING (not just keyword matches).
+Points may be in different languages — group by concept regardless of language.
+
+Points:
+${numbered}
+
+Return ONLY valid JSON (no markdown fences):
+{"clusters":[{"title":"<3-6 word theme>","description":"<max 15 words>","pointIndices":[<indices>]}]}
+
+Rules:
+- Group points sharing the SAME strategic concept regardless of language
+- Each point belongs to exactly ONE cluster
+- Unique points get their own single-point cluster
+- Order clusters by size (largest first)
+- Keep descriptions VERY SHORT (under 15 words)
+- Titles should be strategic and insightful`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [{ role: 'user', parts: [{ text: clusterPrompt }] }],
+        config: { temperature: 0.1, maxOutputTokens: 4096 },
+      });
+
+      const raw = (response.text || '').replace(/```json?\n?/gi, '').replace(/```/g, '').trim();
+      try {
+        const parsed = JSON.parse(raw);
+        return NextResponse.json(parsed);
+      } catch {
+        // Attempt to repair truncated JSON
+        try {
+          const repaired = raw.substring(0, raw.lastIndexOf('}') + 1) + ']}';
+          const parsed = JSON.parse(repaired);
+          console.warn('Repaired truncated SWOT clusters JSON');
+          return NextResponse.json(parsed);
+        } catch {
+          console.error('Failed to parse SWOT clusters:', raw.substring(0, 200));
+          return NextResponse.json({ clusters: [] });
+        }
+      }
+    }
+
     // Fetch chat history for all members in parallel (via admin SDK)
     const chatHistories: Record<string, any> = {};
     const CHAT_FETCH_TIMEOUT = 5000; // 5s timeout per member
@@ -335,13 +388,23 @@ Format in markdown with ### headers. Be specific — reference member names and 
       return NextResponse.json({ text: response.text || "" });
     }
 
+
     // For chat action, use a custom prompt with history context
     if (action === 'chat') {
-      const { message, chatHistory: convoHistory } = body;
+      const { message, chatHistory: convoHistory, zone, zoneDivisions } = body;
       
+      // Zone-specific context injection
+      const zoneContextMap: Record<string, string> = {
+        core: `The team is discussing the CORE VALUE domain — the primary revenue-generating businesses and competitive advantages. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: competitive positioning, resource allocation, value chain optimization, and defending market position.`,
+        social: `The team is discussing the SOCIAL VALUE domain — businesses creating societal impact and addressing social challenges. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: stakeholder value, social innovation, sustainable business models, and balancing profit with purpose.`,
+        nature: `The team is discussing the NATURE VALUE domain — environmental solutions and sustainability initiatives. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: environmental strategy, green innovation, circular economy, and integrating sustainability into core business operations.`,
+      };
+      const zoneContext = zone && zoneContextMap[zone] ? `\n\n## ZONE CONTEXT\n${zoneContextMap[zone]}\n` : '';
+
       const constellationChatPrompt = `You are the TEAM Thinking Partner for a strategy team.
 You have access to ALL team members' individual strategic analyses AND their coaching conversations.
 You're now facilitating a GROUP discussion to identify cross-divisional patterns and build toward a collaborative strategic project.
+${zoneContext}
 
 Your role:
 - Be Socratic: Ask questions, don't give answers directly
@@ -354,17 +417,17 @@ Your role:
 ## CRITICAL: Honest Challenge Protocol
 You have FULL ACCESS to every member's analysis data AND their coaching conversations. Use this to:
 
-1. **Call out uniformly rosy analyses.** If multiple members claim sustained competitive advantage or have no significant weaknesses, say so directly: "I notice that [N] out of [Total] of you rated your competitive position very highly. Looking at the actual data, I want to challenge that — [specific example of where the analysis seems overly optimistic]."
+1. **Call out uniformly rosy analyses.** If multiple members claim sustained competitive advantage or have no significant weaknesses, say so directly.
 
-2. **Surface hidden shared vulnerabilities.** Look for weaknesses that appear across multiple divisions but may have been downplayed individually. "Three of you mentioned dependency on [X] in passing, but none of you flagged it as a major risk. Collectively, this looks like a systemic vulnerability for TTC."
+2. **Surface hidden shared vulnerabilities.** Look for weaknesses that appear across multiple divisions but may have been downplayed individually.
 
-3. **Connect weaknesses to project ideas.** The best Group Action Learning Projects come from honest shared pain, NOT from strengths. Push the team: "Instead of building on what's already working, what if your project tackled the ONE thing that keeps ALL of you up at night?"
+3. **Connect weaknesses to project ideas.** The best Group Action Learning Projects come from honest shared pain, NOT from strengths.
 
-4. **Challenge "safe" project proposals.** If the team proposes something incremental or obvious, push back: "This sounds like something your divisions could each do independently. What would a project look like that REQUIRES cross-divisional collaboration and addresses a vulnerability none of you can solve alone?"
+4. **Challenge "safe" project proposals.** If the team proposes something incremental or obvious, push back.
 
-5. **Reference coaching conversation insights.** You can see what each member discussed with their individual Thinking Partner. Use this: "During your individual coaching, [Name], you mentioned struggling with [X]. Did anyone else face something similar? This could be the seed of something."
+5. **Reference coaching conversation insights.** You can see what each member discussed with their individual Thinking Partner. Use specific examples.
 
-IMPORTANT: You know every team member's full analysis AND coaching journey. Use specific examples from their work to provoke deeper, more honest thinking. The goal is NOT to make everyone feel good — it's to find the real, shared strategic challenges that deserve a transformative project.`;
+IMPORTANT: Keep responses focused and concise (150-250 words). Be direct and provocative.`;
 
       const messages = [
         { role: 'user' as const, parts: [{ text: `TEAM DATA FOR CONTEXT:\n${teamSummary}` }] },
