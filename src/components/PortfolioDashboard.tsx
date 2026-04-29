@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePortfolio, LANGUAGE_LABELS, LANGUAGE_FLAGS, DIFFICULTY_LABELS } from "@/lib/PortfolioContext";
 import type { AppLanguage, DifficultyLevel, HealthCard } from "@/lib/PortfolioContext";
 import { useTeam } from "@/lib/TeamContext";
+import { REGIONS, getDivisionsForRegion } from "@/lib/regionDivisions";
 import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles, Trash2, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import StrategicHealthCard from "./StrategicHealthCard";
@@ -54,6 +55,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
   // Setup form state
   const [name, setName] = useState("");
   const [region, setRegion] = useState("");
+  const [division, setDivision] = useState("");
   const [bizName, setBizName] = useState("");
   const [bizDesc, setBizDesc] = useState("");
   const [chatLang, setChatLang] = useState<AppLanguage>("en");
@@ -75,14 +77,14 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
       </div>
     );
   }
 
   const handleStart = () => {
-    if (name.trim() && region.trim() && bizName.trim()) {
-      startAnalysis(name.trim(), region.trim(), bizName.trim(), bizDesc.trim(), chatLang, difficulty);
+    if (name.trim() && region.trim() && division.trim() && bizName.trim()) {
+      startAnalysis(name.trim(), region.trim(), division.trim(), bizName.trim(), bizDesc.trim(), chatLang, difficulty);
     }
   };
 
@@ -145,13 +147,30 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Your Region / Division</label>
+<label className="block text-xs font-medium text-slate-600 mb-1">Your Region / Division</label>
                   <input
                     type="text" value={region} onChange={(e) => setRegion(e.target.value)}
                     placeholder="e.g. Africa Division, Japan HQ..."
                     className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  {region === "Africa" ? "CFAO Business Line" : "Your Division"}
+                </label>
+                <select
+                  value={division}
+                  onChange={(e) => setDivision(e.target.value)}
+                  disabled={!region}
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">{region ? (region === "Africa" ? "Select CFAO business line..." : "Select division...") : "Pick a region first..."}</option>
+                  {region && getDivisionsForRegion(region).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="mb-4">
@@ -200,7 +219,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
 
               <button
                 onClick={handleStart}
-                disabled={!name.trim() || !region.trim() || !bizName.trim()}
+disabled={!name.trim() || !region.trim() || !bizName.trim()}
                 className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Start My Analysis →
@@ -256,7 +275,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">{portfolio.myAnalysis.businessName}</h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {portfolio.myAnalysis.ownerName} · {portfolio.myAnalysis.ownerRegion}
+                      {portfolio.myAnalysis.ownerName} · {portfolio.myAnalysis.ownerRegion} · {portfolio.myAnalysis.ownerDivision || portfolio.myAnalysis.ownerRegion}
                     </p>
                   </div>
                 </div>

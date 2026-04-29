@@ -4,13 +4,14 @@ import { useAuth } from "@/lib/AuthContext";
 import { MASTER_EMAIL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter, Pencil, Check, X } from "lucide-react";
+import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter, Pencil, Check, X, MessageSquare } from "lucide-react";
 import clsx from "clsx";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, deleteUser, signOut } from "firebase/auth";
 import { doc, setDoc, getDocs, collection, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import * as XLSX from "xlsx";
+import CohortPulse from "@/components/CohortPulse";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -55,6 +56,16 @@ interface PortfolioSnapshot {
   teamCards: any[];
 }
 
+interface EngagementMetrics {
+  totalUserMessages: number;
+  totalCoachMessages: number;
+  avgWordsPerMessage: number;
+  modulesWithChat: number;
+  perModule: { moduleId: string; userMessages: number; avgWords: number }[];
+  score: number; // 0-100
+  label: "Ghost" | "Surface" | "Engaged" | "Deep Thinker";
+}
+
 interface ParticipantProgress {
   user: UserRecord;
   portfolio: PortfolioSnapshot | null;
@@ -67,6 +78,50 @@ interface ParticipantProgress {
   };
   status: "Not Started" | "In Progress" | "Completed";
   currentModule: string;
+  engagement: EngagementMetrics;
+}
+
+const CHAT_MODULES = ["business-model", "external-analysis", "internal-analysis", "swot-synthesis"];
+const CHAT_MODULE_LABELS: Record<string, string> = {
+  "business-model": "BM", "external-analysis": "5F", "internal-analysis": "VRIO", "swot-synthesis": "SWOT",
+};
+
+function calcEngagement(chats: { moduleId: string; messages: { role: string; text: string }[] }[]): EngagementMetrics {
+  let totalUserMessages = 0;
+  let totalCoachMessages = 0;
+  let totalWords = 0;
+  let modulesWithChat = 0;
+  const perModule: EngagementMetrics["perModule"] = [];
+
+  for (const moduleId of CHAT_MODULES) {
+    const chat = chats.find(c => c.moduleId === moduleId);
+    const userMsgs = chat ? chat.messages.filter(m => m.role === "user") : [];
+    const coachMsgs = chat ? chat.messages.filter(m => m.role === "coach") : [];
+    const words = userMsgs.reduce((sum, m) => sum + m.text.split(/\s+/).filter(Boolean).length, 0);
+    const avgWords = userMsgs.length > 0 ? Math.round(words / userMsgs.length) : 0;
+
+    totalUserMessages += userMsgs.length;
+    totalCoachMessages += coachMsgs.length;
+    totalWords += words;
+    if (userMsgs.length > 0) modulesWithChat++;
+    perModule.push({ moduleId, userMessages: userMsgs.length, avgWords });
+  }
+
+  const avgWordsPerMessage = totalUserMessages > 0 ? Math.round(totalWords / totalUserMessages) : 0;
+
+  // Score: weighted formula normalized to 0-100
+  const messageScore = Math.min(totalUserMessages * 2.5, 40); // up to 40 pts for 16+ messages
+  const depthScore = Math.min(avgWordsPerMessage * 0.6, 30);   // up to 30 pts for 50+ avg words
+  const coverageScore = (modulesWithChat / 4) * 30;            // up to 30 pts for all 4 modules
+  const rawScore = Math.round(messageScore + depthScore + coverageScore);
+  const score = Math.min(rawScore, 100);
+
+  let label: EngagementMetrics["label"] = "Ghost";
+  if (score > 75) label = "Deep Thinker";
+  else if (score > 45) label = "Engaged";
+  else if (score > 15) label = "Surface";
+
+  return { totalUserMessages, totalCoachMessages, avgWordsPerMessage, modulesWithChat, perModule, score, label };
 }
 
 function calcProgress(p: PortfolioSnapshot | null): ParticipantProgress["progress"] & { modules: ParticipantProgress["modules"]; status: ParticipantProgress["status"]; currentModule: string } {
@@ -165,6 +220,9 @@ export default function AdminDashboard() {
   // Cohort filter
   const [selectedCohort, setSelectedCohort] = useState<string>("all");
 
+  // Cohort Pulse
+  const [showPulse, setShowPulse] = useState(false);
+
   // Auth guard
   useEffect(() => {
     if (!loading && (!user || user.email?.toLowerCase() !== MASTER_EMAIL.toLowerCase())) {
@@ -197,11 +255,31 @@ export default function AdminDashboard() {
     setLoadingProgress(true);
     const results: ParticipantProgress[] = [];
 
+    const emptyEngagement: EngagementMetrics = {
+      totalUserMessages: 0, totalCoachMessages: 0, avgWordsPerMessage: 0,
+      modulesWithChat: 0, perModule: CHAT_MODULES.map(m => ({ moduleId: m, userMessages: 0, avgWords: 0 })),
+      score: 0, label: "Ghost",
+    };
+
     for (const u of userList) {
       try {
         const portfolioDoc = await getDoc(doc(db, "users", u.uid, "portfolio", "current"));
         const portfolio = portfolioDoc.exists() ? (portfolioDoc.data() as PortfolioSnapshot) : null;
         const prog = calcProgress(portfolio);
+
+        // Load chat history for engagement scoring
+        const chatData: { moduleId: string; messages: { role: string; text: string }[] }[] = [];
+        for (const moduleId of CHAT_MODULES) {
+          try {
+            const chatDoc = await getDoc(doc(db, "users", u.uid, "chats", moduleId));
+            if (chatDoc.exists()) {
+              const data = chatDoc.data();
+              chatData.push({ moduleId, messages: data.messages || [] });
+            }
+          } catch (_) { /* skip unreadable chats */ }
+        }
+        const engagement = chatData.length > 0 ? calcEngagement(chatData) : emptyEngagement;
+
         results.push({
           user: u,
           portfolio,
@@ -209,6 +287,7 @@ export default function AdminDashboard() {
           modules: prog.modules,
           status: prog.status,
           currentModule: prog.currentModule,
+          engagement,
         });
       } catch (e) {
         console.error(`Failed to load progress for ${u.email}:`, e);
@@ -219,6 +298,7 @@ export default function AdminDashboard() {
           modules: { businessModel: { done: 0, total: 3 }, fiveForces: { done: 0, total: 5 }, vrio: { done: 0, total: 4 }, swot: { done: 0, total: 4 } },
           status: "Not Started",
           currentModule: "—",
+          engagement: emptyEngagement,
         });
       }
     }
@@ -419,7 +499,7 @@ export default function AdminDashboard() {
   if (loading || !user || user.email?.toLowerCase() !== MASTER_EMAIL.toLowerCase()) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-10 w-10 animate-spin text-red-600" />
+        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
       </div>
     );
   }
@@ -453,8 +533,8 @@ export default function AdminDashboard() {
               <button onClick={() => router.push("/journey")} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">HEC Admin Dashboard</h1>
-              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.6-hec</span>
+<h1 className="text-2xl font-bold text-slate-900 tracking-tight">HEC Admin Dashboard</h1>
+              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.7-hec</span>
             </div>
             <p className="text-sm text-slate-500 ml-8">Monitor participant progress and manage accounts.</p>
           </div>
@@ -495,20 +575,30 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-200 shadow-sm w-fit">
-          <button
-            onClick={() => setTab("progress")}
-            className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "progress" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
-          >
-            📊 Participant Progress
-          </button>
-          <button
-            onClick={() => setTab("users")}
-            className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "users" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
-          >
-            👤 User Management
-          </button>
+        {/* Tab Switcher + Actions */}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-200 shadow-sm w-fit">
+            <button
+              onClick={() => setTab("progress")}
+              className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "progress" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
+            >
+              📊 Participant Progress
+            </button>
+            <button
+              onClick={() => setTab("users")}
+              className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "users" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
+            >
+              👤 User Management
+            </button>
+          </div>
+          {tab === "progress" && filteredParticipants.length > 0 && (
+            <button
+              onClick={() => setShowPulse(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm"
+            >
+              ⚡ Cohort Pulse
+            </button>
+          )}
         </div>
 
         {/* ═══ PROGRESS TAB ═══ */}
@@ -516,7 +606,7 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-red-600" />
+                <BarChart3 className="h-5 w-5 text-indigo-600" />
                 <h2 className="font-bold text-slate-800">Participant Progress</h2>
               </div>
               <span className="text-xs text-slate-400">{filteredParticipants.length} participants</span>
@@ -579,8 +669,11 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
+                      {/* Engagement Score */}
+                      <EngagementBadge engagement={p.engagement} />
+
                       {/* Business name */}
-                      <div className="w-36 flex-shrink-0 text-right">
+                      <div className="w-32 flex-shrink-0 text-right">
                         {p.portfolio?.myAnalysis ? (
                           <p className="text-xs font-medium text-slate-600 truncate">{p.portfolio.myAnalysis.businessName}</p>
                         ) : (
@@ -604,7 +697,7 @@ export default function AdminDashboard() {
             {/* Create User Form */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <UserPlus className="h-5 w-5 text-red-600" />
+                <UserPlus className="h-5 w-5 text-indigo-600" />
                 <h2 className="font-bold text-slate-800">Create New User</h2>
               </div>
               <form onSubmit={handleCreate} className="space-y-3">
@@ -835,6 +928,30 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* Cohort Pulse Modal */}
+      {showPulse && (
+        <CohortPulse
+          cohortName={selectedCohort === "all" ? "All Participants" : selectedCohort}
+          participants={filteredParticipants.map(p => ({
+            name: p.user.name || p.portfolio?.myAnalysis?.ownerName || p.user.email.split("@")[0],
+            email: p.user.email,
+            cohort: p.user.cohort,
+            businessName: p.portfolio?.myAnalysis?.businessName,
+            ownerRegion: p.portfolio?.myAnalysis?.ownerRegion,
+            progressPercent: p.progress.percent,
+            status: p.status,
+            modules: p.modules,
+            engagement: {
+              totalUserMessages: p.engagement.totalUserMessages,
+              modulesWithChat: p.engagement.modulesWithChat,
+              score: p.engagement.score,
+              label: p.engagement.label,
+            },
+          }))}
+          onClose={() => setShowPulse(false)}
+        />
+      )}
     </div>
   );
 }
@@ -855,6 +972,90 @@ function ModuleDots({ label, done, total }: { label: string; done: number; total
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+// Engagement score badge with hover tooltip
+function EngagementBadge({ engagement }: { engagement: EngagementMetrics }) {
+  const [showDetail, setShowDetail] = useState(false);
+
+  const colorMap = {
+    "Ghost": { bg: "bg-slate-100", text: "text-slate-400", ring: "ring-slate-200", bar: "bg-slate-300" },
+    "Surface": { bg: "bg-amber-50", text: "text-amber-600", ring: "ring-amber-200", bar: "bg-amber-400" },
+    "Engaged": { bg: "bg-blue-50", text: "text-blue-600", ring: "ring-blue-200", bar: "bg-blue-500" },
+    "Deep Thinker": { bg: "bg-emerald-50", text: "text-emerald-600", ring: "ring-emerald-200", bar: "bg-emerald-500" },
+  };
+  const colors = colorMap[engagement.label];
+
+  return (
+    <div className="relative w-20 flex-shrink-0">
+      <button
+        onClick={() => setShowDetail(!showDetail)}
+        className={clsx(
+          "flex flex-col items-center gap-0.5 w-full rounded-xl px-2 py-1.5 ring-1 transition-all cursor-pointer hover:shadow-sm",
+          colors.bg, colors.ring
+        )}
+      >
+        <div className="flex items-center gap-1">
+          <MessageSquare className={clsx("h-3 w-3", colors.text)} />
+          <span className={clsx("text-sm font-bold", colors.text)}>{engagement.score}</span>
+        </div>
+        <span className={clsx("text-[9px] font-semibold leading-tight", colors.text)}>{engagement.label}</span>
+        {/* Mini bar */}
+        <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-0.5">
+          <div className={clsx("h-full rounded-full transition-all", colors.bar)} style={{ width: `${engagement.score}%` }} />
+        </div>
+      </button>
+
+      {/* Detail popover */}
+      {showDetail && (
+        <div className="absolute top-full right-0 mt-1 z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-3 w-56 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-bold text-slate-700">AI Coach Engagement</h4>
+            <button onClick={() => setShowDetail(false)} className="text-slate-300 hover:text-slate-500">
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5 text-[11px] mb-3">
+            <div className="bg-slate-50 rounded-lg px-2 py-1.5">
+              <p className="text-slate-400 text-[10px]">Messages</p>
+              <p className="font-bold text-slate-700">{engagement.totalUserMessages}</p>
+            </div>
+            <div className="bg-slate-50 rounded-lg px-2 py-1.5">
+              <p className="text-slate-400 text-[10px]">Avg Words</p>
+              <p className="font-bold text-slate-700">{engagement.avgWordsPerMessage}</p>
+            </div>
+            <div className="bg-slate-50 rounded-lg px-2 py-1.5">
+              <p className="text-slate-400 text-[10px]">Modules</p>
+              <p className="font-bold text-slate-700">{engagement.modulesWithChat}/4</p>
+            </div>
+            <div className="bg-slate-50 rounded-lg px-2 py-1.5">
+              <p className="text-slate-400 text-[10px]">Score</p>
+              <p className={clsx("font-bold", colors.text)}>{engagement.score}/100</p>
+            </div>
+          </div>
+
+          <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Per Module</p>
+          <div className="space-y-1">
+            {engagement.perModule.map((m) => (
+              <div key={m.moduleId} className="flex items-center gap-2 text-[11px]">
+                <span className="w-10 text-slate-400 font-medium">{CHAT_MODULE_LABELS[m.moduleId]}</span>
+                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={clsx("h-full rounded-full", m.userMessages > 0 ? "bg-blue-400" : "bg-slate-200")}
+                    style={{ width: `${Math.min(m.userMessages * 10, 100)}%` }}
+                  />
+                </div>
+                <span className="text-slate-500 w-14 text-right">
+                  {m.userMessages > 0 ? `${m.userMessages} msg` : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

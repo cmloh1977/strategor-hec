@@ -57,8 +57,8 @@ export default function Home() {
               <Shield className="h-8 w-8" />
             </div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">HEC Strategy Coach</h1>
-              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.6-hec</span>
+<h1 className="text-2xl font-bold tracking-tight text-slate-900">HEC Strategy Coach</h1>
+              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.7-hec</span>
             </div>
             <p className="mt-2 text-sm text-slate-500">Master Strategic Analysis.</p>
           </div>
