@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "ttc-dna"
-  }
+  },
+  "targets": {
+    "ttc-dna": {
+      "database": {
+        "strategor-hec": [
+          "strategor-hec"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
