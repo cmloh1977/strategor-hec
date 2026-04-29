@@ -3,14 +3,13 @@
 import { useAuth } from "@/lib/AuthContext";
 import { PortfolioProvider, usePortfolio } from "@/lib/PortfolioContext";
 import { TeamProvider, useTeam } from "@/lib/TeamContext";
+import { MASTER_EMAIL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LogOut, LayoutDashboard, BookOpen, Compass, Layers, ShieldAlert, Lock, Zap, BarChart3, MessageSquare, Target, Settings, KeyRound, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
-
-const MASTER_EMAIL = "chee_ming_loh@toyota-tsusho.com";
 
 const ANALYSIS_STEPS = [
   { id: "business-model", name: "Business Model", icon: BookOpen },
@@ -108,7 +107,7 @@ function SidebarContent() {
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             )}
           >
-            <LayoutDashboard className={clsx("h-5 w-5", currentView === "dashboard" ? "text-indigo-600" : "text-slate-400")} />
+            <LayoutDashboard className={clsx("h-5 w-5", currentView === "dashboard" ? "text-red-600" : "text-slate-400")} />
             <span>Dashboard</span>
           </Link>
 
