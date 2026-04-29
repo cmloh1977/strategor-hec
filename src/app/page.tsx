@@ -58,7 +58,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">GALP Strategy Coach</h1>
-              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.6-dev</span>
+              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.6-galp</span>
             </div>
             <p className="mt-2 text-sm text-slate-500">Master Strategic Analysis before Paris.</p>
           </div>
