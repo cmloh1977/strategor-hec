@@ -11,6 +11,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, up
 import { doc, setDoc, getDocs, collection, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import * as XLSX from "xlsx";
+import CohortPulse from "@/components/CohortPulse";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -218,6 +219,9 @@ export default function AdminDashboard() {
 
   // Cohort filter
   const [selectedCohort, setSelectedCohort] = useState<string>("all");
+
+  // Cohort Pulse
+  const [showPulse, setShowPulse] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -571,20 +575,30 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-200 shadow-sm w-fit">
-          <button
-            onClick={() => setTab("progress")}
-            className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "progress" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
-          >
-            📊 Participant Progress
-          </button>
-          <button
-            onClick={() => setTab("users")}
-            className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "users" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
-          >
-            👤 User Management
-          </button>
+        {/* Tab Switcher + Actions */}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-200 shadow-sm w-fit">
+            <button
+              onClick={() => setTab("progress")}
+              className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "progress" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
+            >
+              📊 Participant Progress
+            </button>
+            <button
+              onClick={() => setTab("users")}
+              className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-colors", tab === "users" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700")}
+            >
+              👤 User Management
+            </button>
+          </div>
+          {tab === "progress" && filteredParticipants.length > 0 && (
+            <button
+              onClick={() => setShowPulse(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm"
+            >
+              ⚡ Cohort Pulse
+            </button>
+          )}
         </div>
 
         {/* ═══ PROGRESS TAB ═══ */}
@@ -914,6 +928,30 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* Cohort Pulse Modal */}
+      {showPulse && (
+        <CohortPulse
+          cohortName={selectedCohort === "all" ? "All Participants" : selectedCohort}
+          participants={filteredParticipants.map(p => ({
+            name: p.user.name || p.portfolio?.myAnalysis?.ownerName || p.user.email.split("@")[0],
+            email: p.user.email,
+            cohort: p.user.cohort,
+            businessName: p.portfolio?.myAnalysis?.businessName,
+            ownerRegion: p.portfolio?.myAnalysis?.ownerRegion,
+            progressPercent: p.progress.percent,
+            status: p.status,
+            modules: p.modules,
+            engagement: {
+              totalUserMessages: p.engagement.totalUserMessages,
+              modulesWithChat: p.engagement.modulesWithChat,
+              score: p.engagement.score,
+              label: p.engagement.label,
+            },
+          }))}
+          onClose={() => setShowPulse(false)}
+        />
+      )}
     </div>
   );
 }
