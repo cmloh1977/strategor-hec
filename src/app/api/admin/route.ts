@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
-
-const MASTER_EMAIL = "chee_ming_loh@toyota-tsusho.com";
+import { MASTER_EMAIL } from "@/lib/constants";
 
 export async function POST(req: Request) {
   try {
