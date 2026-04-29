@@ -121,6 +121,7 @@ export interface MyAnalysis {
   businessDescription: string;
   ownerName: string;
   ownerRegion: string;
+  ownerDivision: string;
   color: string;
   chatLanguage: AppLanguage;
   diagramLanguage: AppLanguage;
@@ -233,7 +234,7 @@ interface PortfolioContextType {
   isLoading: boolean;
 
   // My Analysis
-  startAnalysis: (name: string, region: string, businessName: string, businessDesc: string, chatLang: AppLanguage, difficulty: DifficultyLevel) => void;
+  startAnalysis: (name: string, region: string, division: string, businessName: string, businessDesc: string, chatLang: AppLanguage, difficulty: DifficultyLevel) => void;
   resetAnalysis: () => void;
   setDiagramLanguage: (lang: AppLanguage) => void;
   populatePillar: (module: "businessModel" | "fiveForces" | "vrio" | "swot", pillar: string, points: string[]) => void;
@@ -314,7 +315,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   );
 
   // ── Actions: My Analysis ──
-  const startAnalysis = (name: string, region: string, businessName: string, businessDesc: string, chatLang: AppLanguage = "en", difficulty: DifficultyLevel = "masters") => {
+  const startAnalysis = (name: string, region: string, division: string, businessName: string, businessDesc: string, chatLang: AppLanguage = "en", difficulty: DifficultyLevel = "masters") => {
     const colorIndex = Math.floor(Math.random() * COLORS.length);
     update((p) => ({
       ...p,
@@ -323,6 +324,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         businessDescription: businessDesc,
         ownerName: name,
         ownerRegion: region,
+        ownerDivision: division,
         color: COLORS[colorIndex],
         chatLanguage: chatLang,
         diagramLanguage: chatLang,
