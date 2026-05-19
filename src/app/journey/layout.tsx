@@ -92,7 +92,7 @@ function SidebarContent() {
           <Zap className="h-6 w-6 text-red-600 mr-3" />
           <h2 className="font-bold text-lg text-slate-800 tracking-tight flex items-center">
             Strategy Coach
-            <span className="ml-2 bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">v8.7-galp</span>
+            <span className="ml-2 bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">v8.8-galp</span>
           </h2>
         </div>
 
