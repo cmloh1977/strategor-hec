@@ -332,7 +332,7 @@ Total response: 100-180 words maximum. Questions only, no answers.`;
         config: {
           systemInstruction: memberChallengePrompt,
           temperature: 0.7,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 2048,
         },
       });
 
