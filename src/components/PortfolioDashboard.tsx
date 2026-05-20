@@ -147,12 +147,17 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
                   />
                 </div>
                 <div>
-<label className="block text-xs font-medium text-slate-600 mb-1">Your Region / Division</label>
-                  <input
-                    type="text" value={region} onChange={(e) => setRegion(e.target.value)}
-                    placeholder="e.g. Africa Division, Japan HQ..."
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                  />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Your Region</label>
+                  <select
+                    value={region}
+                    onChange={(e) => { setRegion(e.target.value); setDivision(""); }}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
+                  >
+                    <option value="">Select region...</option>
+                    {REGIONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

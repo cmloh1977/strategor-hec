@@ -328,8 +328,8 @@ export default function AdminDashboard() {
         uid: result.user.uid,
         createdAt: new Date().toISOString(),
         password: newPassword.trim(),
-        name: newName.trim() || undefined,
-        cohort: newCohort.trim() || undefined,
+        ...(newName.trim() ? { name: newName.trim() } : {}),
+        ...(newCohort.trim() ? { cohort: newCohort.trim() } : {}),
       };
       await setDoc(doc(db, "_admin_users", result.user.uid), record);
 
@@ -412,8 +412,8 @@ export default function AdminDashboard() {
             uid: result.user.uid,
             createdAt: new Date().toISOString(),
             password,
-            name: name || undefined,
-            cohort: cohort || undefined,
+            ...(name ? { name } : {}),
+            ...(cohort ? { cohort } : {}),
           };
           await setDoc(doc(db, "_admin_users", result.user.uid), record);
         } catch (err: any) {
