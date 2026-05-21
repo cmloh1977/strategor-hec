@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePortfolio, LANGUAGE_LABELS, LANGUAGE_FLAGS, DIFFICULTY_LABELS } from "@/lib/PortfolioContext";
 import type { AppLanguage, DifficultyLevel, HealthCard } from "@/lib/PortfolioContext";
 import { useTeam } from "@/lib/TeamContext";
-import { REGIONS, getDivisionsForRegion } from "@/lib/regionDivisions";
+
 import { ChevronRight, Lock, CheckCircle2, Circle, Loader2, Copy, Check, UserPlus, X, Users, Sparkles, Trash2, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import StrategicHealthCard from "./StrategicHealthCard";
@@ -83,8 +83,8 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
   }
 
   const handleStart = () => {
-    if (name.trim() && region.trim() && division.trim() && bizName.trim()) {
-      startAnalysis(name.trim(), region.trim(), division.trim(), bizName.trim(), bizDesc.trim(), chatLang, difficulty);
+    if (name.trim() && bizName.trim()) {
+      startAnalysis(name.trim(), region.trim() || "N/A", division.trim() || "N/A", bizName.trim(), bizDesc.trim(), chatLang, difficulty);
     }
   };
 
@@ -135,47 +135,15 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
             /* ── Setup Form ── */
             <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-8">
               <h3 className="text-lg font-bold text-slate-900 mb-1">Define Your Business</h3>
-              <p className="text-sm text-slate-500 mb-6">Tell us about yourself and the business you'll analyze.</p>
-
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Your Name</label>
-                  <input
-                    type="text" value={name} onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Kenji Tanaka"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Your Region</label>
-                  <select
-                    value={region}
-                    onChange={(e) => { setRegion(e.target.value); setDivision(""); }}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
-                  >
-                    <option value="">Select region...</option>
-                    {REGIONS.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <p className="text-sm text-slate-500 mb-6">Tell us about yourself and the business you&apos;ll analyze.</p>
 
               <div className="mb-4">
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  {region === "Africa" ? "CFAO Business Line" : "Your Division"}
-                </label>
-                <select
-                  value={division}
-                  onChange={(e) => setDivision(e.target.value)}
-                  disabled={!region}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">{region ? (region === "Africa" ? "Select CFAO business line..." : "Select division...") : "Pick a region first..."}</option>
-                  {region && getDivisionsForRegion(region).map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Your Name</label>
+                <input
+                  type="text" value={name} onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Kenji Tanaka"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                />
               </div>
 
               <div className="mb-4">
@@ -224,7 +192,7 @@ export default function PortfolioDashboard({ onNavigate }: PortfolioDashboardPro
 
               <button
                 onClick={handleStart}
-disabled={!name.trim() || !region.trim() || !bizName.trim()}
+disabled={!name.trim() || !bizName.trim()}
                 className="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Start My Analysis →
