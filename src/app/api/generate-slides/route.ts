@@ -118,7 +118,11 @@ Synthesize the strategic position:
 
 ### For each framework also generate:
 - **headline**: A clear informative one-liner summarizing the key finding (max 15 words)
-- **synthesis**: A one-sentence "so what?" takeaway
+- **implications**: An array of EXACTLY 3 strategic implications. These are NOT summaries — they are forward-looking, specific, actionable insights about what the findings mean for the business. Each should be 15-25 words. Start each with a concrete observation (not "This means..."). Examples:
+  - "Heavy reliance on a single partner network creates concentration risk if key relationships are disrupted"
+  - "The talent development system is a rare advantage but currently not quantified for ESG-focused procurement"
+  - "Low substitute threat provides breathing room to invest in long-term value architecture improvements"
+- **bottomLine**: A punchy one-liner (max 10 words) that captures the overall verdict. Examples: "Solid model with untapped ESG narrative potential", "Well-protected but operationally stretched", "Strong resources, weak organizational leverage"
 
 ### Also generate overall:
 - **overallSynthesis**: 2-sentence strategic narrative connecting all 4 frameworks
@@ -134,7 +138,8 @@ Synthesize the strategic position:
       { "label": "HOW WE DELIVER", "summary": "..." },
       { "label": "WHAT IT GENERATES", "summary": "..." }
     ],
-    "synthesis": "..."
+    "implications": ["...", "...", "..."],
+    "bottomLine": "..."
   },
   "fiveForces": {
     "headline": "...",
@@ -143,7 +148,8 @@ Synthesize the strategic position:
       { "label": "COMPETITIVE LANDSCAPE", "summary": "..." },
       { "label": "WHERE WE'RE SHIELDED", "summary": "..." }
     ],
-    "synthesis": "..."
+    "implications": ["...", "...", "..."],
+    "bottomLine": "..."
   },
   "vrio": {
     "headline": "...",
@@ -153,7 +159,8 @@ Synthesize the strategic position:
       { "label": "WHAT'S HARD TO COPY", "summary": "..." },
       { "label": "HOW WE'RE ORGANIZED", "summary": "..." }
     ],
-    "synthesis": "..."
+    "implications": ["...", "...", "..."],
+    "bottomLine": "..."
   },
   "swot": {
     "headline": "...",
@@ -163,7 +170,8 @@ Synthesize the strategic position:
       { "label": "WHAT'S AHEAD", "summary": "..." },
       { "label": "WHAT'S AT RISK", "summary": "..." }
     ],
-    "synthesis": "..."
+    "implications": ["...", "...", "..."],
+    "bottomLine": "..."
   },
   "overallSynthesis": "...",
   "keyStrength": "...",
@@ -296,7 +304,8 @@ async function buildPPTX(
     storyCards: (slideContent.businessModel?.storyCards || []).map((c: any) => ({
       ...c, icon: iconMap[c.label] || "\u2726",
     })),
-    synthesis: slideContent.businessModel?.synthesis || "",
+    implications: slideContent.businessModel?.implications || [],
+    bottomLine: slideContent.businessModel?.bottomLine || "",
     businessName, ownerName,
   });
 
@@ -312,7 +321,8 @@ async function buildPPTX(
     storyCards: (slideContent.fiveForces?.storyCards || []).map((c: any) => ({
       ...c, icon: iconMap[c.label] || "\u2726",
     })),
-    synthesis: slideContent.fiveForces?.synthesis || "",
+    implications: slideContent.fiveForces?.implications || [],
+    bottomLine: slideContent.fiveForces?.bottomLine || "",
     businessName, ownerName,
   });
 
@@ -328,7 +338,8 @@ async function buildPPTX(
     storyCards: (slideContent.vrio?.storyCards || []).map((c: any) => ({
       ...c, icon: iconMap[c.label] || "\u2726",
     })),
-    synthesis: slideContent.vrio?.synthesis || "",
+    implications: slideContent.vrio?.implications || [],
+    bottomLine: slideContent.vrio?.bottomLine || "",
     businessName, ownerName,
   });
 
@@ -344,7 +355,8 @@ async function buildPPTX(
     storyCards: (slideContent.swot?.storyCards || []).map((c: any) => ({
       ...c, icon: iconMap[c.label] || "\u2726",
     })),
-    synthesis: slideContent.swot?.synthesis || "",
+    implications: slideContent.swot?.implications || [],
+    bottomLine: slideContent.swot?.bottomLine || "",
     businessName, ownerName,
   });
 
@@ -430,7 +442,8 @@ interface FrameworkConfig {
   accentLight: string;
   headline: string;
   storyCards: StoryCard[];
-  synthesis: string;
+  implications: string[];
+  bottomLine: string;
   businessName: string;
   ownerName: string;
 }
@@ -510,39 +523,50 @@ function buildFrameworkSlide(pptx: PptxGenJS, cfg: FrameworkConfig) {
     });
   });
 
-  // ── RIGHT SIDE: Synthesis ──
+  // ── RIGHT SIDE: Strategic Implications ──
   const rightX = 5.0;
   const rightW = 4.6;
 
-  // "SO WHAT?" synthesis card
-  const synthY = 1.1;
-  slide.addShape(pptx.ShapeType.roundRect, {
-    x: rightX - 0.1, y: synthY, w: rightW + 0.2, h: 1.0,
-    fill: { color: cfg.accentLight }, rectRadius: 0.1,
-  });
-  slide.addText("SO WHAT DOES THIS MEAN?", {
-    x: rightX, y: synthY + 0.08, w: rightW, h: 0.2,
-    fontSize: 8, fontFace: "Arial", color: cfg.accentColor, bold: true,
-  });
-  slide.addText(cfg.synthesis, {
-    x: rightX, y: synthY + 0.3, w: rightW, h: 0.65,
-    fontSize: 12, fontFace: "Arial", color: CLR.darkSlate,
-    valign: "top",
+  // Section header
+  slide.addText("STRATEGIC IMPLICATIONS", {
+    x: rightX, y: 1.1, w: rightW, h: 0.25,
+    fontSize: 9, fontFace: "Arial", color: cfg.accentColor, bold: true,
   });
 
-  // Presenter note area (subtle guide for what to SAY)
-  const noteY = 2.4;
-  slide.addShape(pptx.ShapeType.line, {
-    x: rightX, y: noteY, w: rightW, h: 0,
-    line: { color: CLR.slate200, width: 0.5, dashType: "dash" },
+  // 3 implications with arrow bullets
+  const implications = (cfg.implications || []).slice(0, 3);
+  implications.forEach((imp, i) => {
+    const impY = 1.5 + i * 0.75;
+
+    // Arrow icon
+    slide.addText("\u2192", {
+      x: rightX, y: impY, w: 0.25, h: 0.2,
+      fontSize: 12, fontFace: "Arial", color: cfg.accentColor, bold: true,
+    });
+
+    // Implication text
+    slide.addText(imp, {
+      x: rightX + 0.3, y: impY, w: rightW - 0.3, h: 0.65,
+      fontSize: 11, fontFace: "Arial", color: CLR.slate700,
+      valign: "top",
+    });
   });
-  slide.addText("PRESENTER NOTES", {
-    x: rightX, y: noteY + 0.15, w: rightW, h: 0.2,
-    fontSize: 7, fontFace: "Arial", color: CLR.slate400, bold: true,
+
+  // Bottom Line card
+  const blY = 3.75;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: rightX - 0.1, y: blY, w: rightW + 0.2, h: 0.65,
+    fill: { color: cfg.accentLight }, rectRadius: 0.1,
+    line: { color: cfg.accentColor, width: 0.5 },
   });
-  slide.addText("Use the story cards on the left as anchors.\nRead the label, then elaborate with your own\nknowledge and examples.", {
-    x: rightX, y: noteY + 0.4, w: rightW, h: 0.8,
-    fontSize: 9, fontFace: "Arial", color: CLR.slate400, italic: true,
+  slide.addText("BOTTOM LINE", {
+    x: rightX, y: blY + 0.05, w: rightW, h: 0.18,
+    fontSize: 7, fontFace: "Arial", color: cfg.accentColor, bold: true,
+  });
+  slide.addText(cfg.bottomLine, {
+    x: rightX, y: blY + 0.22, w: rightW, h: 0.38,
+    fontSize: 13, fontFace: "Arial", color: CLR.darkSlate, bold: true,
+    valign: "top",
   });
 
   addFooter(slide, pptx, cfg.businessName, cfg.ownerName);
