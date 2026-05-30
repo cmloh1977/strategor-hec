@@ -89,6 +89,8 @@ export interface PlacementState {
   portfolioSynthesis: string | null;
 }
 
+export type StrategyZone = 'core' | 'social' | 'nature';
+
 export interface TeamData {
   teamName: string;
   joinCode: string;
@@ -100,7 +102,10 @@ export interface TeamData {
   dimensions: DimensionData | null;
   projectCanvas: ProjectCanvas | null;
   chatMessages: ChatMessage[];
+  zoneChatMessages?: Record<StrategyZone, ChatMessage[]>;
   placementState: PlacementState | null;
+  swotClusters?: Record<string, any[]>;
+  swotTranslations?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,7 +127,9 @@ interface TeamContextType {
   saveDimensions: (data: DimensionData) => Promise<void>;
   clearDimensions: () => Promise<void>;
   saveProjectCanvas: (canvas: ProjectCanvas) => Promise<void>;
+  saveSwotAnalysis: (clusters: Record<string, any[]>, translations: Record<string, string>) => Promise<void>;
   addChatMessage: (message: ChatMessage) => Promise<void>;
+  addZoneChatMessage: (zone: StrategyZone, message: ChatMessage) => Promise<void>;
 
   // V8: Placement actions
   savePlacement: (shareCode: string, position: { x: number; y: number }, justification: string, aiPosition: { x: number; y: number }, lock?: boolean, bubbleSize?: number) => Promise<void>;
@@ -410,6 +417,19 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     }
   }, [teamCode]);
 
+  const saveSwotAnalysis = useCallback(async (clusters: Record<string, any[]>, translations: Record<string, string>) => {
+    if (!teamCode) return;
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        swotClusters: clusters,
+        swotTranslations: translations,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("Save SWOT analysis error:", e);
+    }
+  }, [teamCode]);
+
   const saveDimensions = useCallback(async (data: DimensionData) => {
     if (!teamCode) return;
     try {
@@ -455,6 +475,18 @@ export function TeamProvider({ children }: { children: ReactNode }) {
       });
     } catch (e) {
       console.error("Add chat message error:", e);
+    }
+  }, [teamCode]);
+
+  const addZoneChatMessage = useCallback(async (zone: StrategyZone, message: ChatMessage) => {
+    if (!teamCode) return;
+    try {
+      await updateDoc(doc(db, "teams", teamCode), {
+        [`zoneChatMessages.${zone}`]: arrayUnion(message),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error(`Add zone chat message error (${zone}):`, e);
     }
   }, [teamCode]);
 
@@ -719,7 +751,9 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         saveDimensions,
         clearDimensions,
         saveProjectCanvas,
+        saveSwotAnalysis,
         addChatMessage,
+        addZoneChatMessage,
         savePlacement,
         lockPlacement,
         revealAll,
