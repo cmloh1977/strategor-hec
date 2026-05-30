@@ -35,31 +35,11 @@ function getGradeInfo(score: number) {
   return { grade: "F", color: CLR.red };
 }
 
-function getBarColor(value: number, max: number): string {
-  const pct = value / max;
-  if (pct >= 0.8) return CLR.emerald;
-  if (pct >= 0.6) return CLR.blue;
-  if (pct >= 0.4) return CLR.amber;
-  if (pct >= 0.2) return CLR.orange;
-  return CLR.red;
-}
-
-function getThreatColor(severity: number): string {
-  if (severity <= 3) return CLR.emerald;
-  if (severity <= 6) return CLR.amber;
-  if (severity <= 8) return CLR.orange;
-  return CLR.red;
-}
-
-function starsText(score: number, max: number = 5): string {
-  return "\u2605".repeat(score) + "\u2606".repeat(max - score);
-}
-
-interface ScoreItem {
-  label: string;
-  value: string;
-  barPct: number;
-  barColor: string;
+// ── Story card type ──
+interface StoryCard {
+  icon: string;   // e.g. emoji or short label
+  label: string;  // e.g. "WHO WE SERVE"
+  summary: string; // one-liner
 }
 
 export async function POST(req: Request) {
@@ -71,16 +51,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing analysis or aiScores" }, { status: 400 });
     }
 
-    // ── Step 1: Call Gemini to translate/summarize findings into English ──
+    // ── Step 1: Call Gemini for English story content ──
     const frameworkSummary = buildFrameworkSummary(analysis, aiScores);
     const slideContent = await generateSlideContent(frameworkSummary);
 
-    // ── Step 2: Build the PPTX server-side ──
-    const pptxBuffer = await buildPPTX(
-      slideContent,
-      aiScores,
-      analysis,
-    );
+    // ── Step 2: Build the PPTX ──
+    const pptxBuffer = await buildPPTX(slideContent, aiScores, analysis);
 
     // ── Step 3: Return as downloadable binary ──
     const fileName = `${analysis.businessName.replace(/[^a-zA-Z0-9]/g, "_")}_Strategy_Slides.pptx`;
@@ -100,49 +76,93 @@ export async function POST(req: Request) {
 }
 
 // ════════════════════════════════════════
-// Gemini: Summarize findings in English
+// Gemini: Generate story-format content
 // ════════════════════════════════════════
 async function generateSlideContent(frameworkSummary: string) {
-  const prompt = `You are a senior strategy consultant helping a leadership program participant present their business analysis to their team.
+  const prompt = `You are a senior strategy consultant helping a leadership program participant present their business analysis to their team for the first time.
 
-The participant has completed a strategic analysis of their division. Your job is to create concise, clear ENGLISH presentation content that helps team members understand this business.
+The goal is to help the AUDIENCE quickly understand this person's business through 4 strategic frameworks. Each framework should be distilled into easy-to-understand story cards.
 
-IMPORTANT: This is for SHARING FINDINGS, not for triggering Q&A. The goal is to help the audience understand the presenter's business, NOT to challenge them.
+IMPORTANT: All content MUST be in English regardless of the original analysis language. This is for SHARING FINDINGS to help others understand the business — NOT for Q&A or challenging.
 
 ## Analysis Data
 ${frameworkSummary}
 
 ## Instructions
-For each of the 4 frameworks, generate:
-1. **headline**: A clear one-line insight that summarizes the key finding. NOT provocative — informative. Examples: "A strong HR model anchored in talent development and global networks", "High competitive pressure from industry consolidation". Maximum 15 words.
-2. **keyFindings**: An array of 3 concise bullet points (in English) summarizing the most important findings from this framework. Each bullet should be 8-15 words. These are the talking points the presenter will elaborate on. DO NOT just repeat the raw data — synthesize and express the strategic meaning.
-3. **synthesis**: A one-sentence synthesis of what this framework reveals about the business. This is the "so what?" takeaway.
 
-Also generate:
-4. **overallSynthesis**: A 2-sentence overall strategic narrative connecting all 4 frameworks together. What's the big picture?
-5. **keyStrength**: The single most important strength discovered across all frameworks (one sentence).
-6. **keyChallenge**: The single most important challenge or vulnerability discovered (one sentence).
+### For "businessModel" — generate 3 storyCards:
+Each card tells a part of the business model story:
+- Card 1: label="WHO WE SERVE", summary=one sentence about customers and what products/services are offered (max 20 words)
+- Card 2: label="HOW WE DELIVER", summary=one sentence about the value chain, key activities, partners, and resources (max 20 words)  
+- Card 3: label="WHAT IT GENERATES", summary=one sentence about financial, environmental, and societal contributions (max 20 words)
 
-## Required JSON Format (respond with ONLY valid JSON, no markdown fences):
+### For "fiveForces" — generate 3 storyCards:
+Distill the 5 forces into a competitive landscape story:
+- Card 1: label="BIGGEST THREAT", summary=which force is most dangerous and why (max 20 words)
+- Card 2: label="COMPETITIVE LANDSCAPE", summary=the overall competitive dynamic — what drives rivalry (max 20 words)
+- Card 3: label="WHERE WE'RE SHIELDED", summary=which forces are least threatening and why (max 20 words)
+
+### For "vrio" — generate 4 storyCards:
+Tell the resource advantage story through the VRIO filter:
+- Card 1: label="WHAT'S VALUABLE", summary=the key resources/capabilities that create value (max 20 words)
+- Card 2: label="WHAT'S TRULY RARE", summary=what sets this business apart from competitors honestly (max 20 words)
+- Card 3: label="WHAT'S HARD TO COPY", summary=why competitors can't easily replicate these advantages (max 20 words)
+- Card 4: label="HOW WE'RE ORGANIZED", summary=whether the organization is set up to exploit these advantages (max 20 words)
+
+### For "swot" — generate 4 storyCards:
+Synthesize the strategic position:
+- Card 1: label="WHERE WE'RE STRONG", summary=the key internal strengths (max 20 words)
+- Card 2: label="WHERE WE'RE EXPOSED", summary=the key internal weaknesses honestly (max 20 words)
+- Card 3: label="WHAT'S AHEAD", summary=the most promising external opportunities (max 20 words)
+- Card 4: label="WHAT'S AT RISK", summary=the most serious external threats (max 20 words)
+
+### For each framework also generate:
+- **headline**: A clear informative one-liner summarizing the key finding (max 15 words)
+- **synthesis**: A one-sentence "so what?" takeaway
+
+### Also generate overall:
+- **overallSynthesis**: 2-sentence strategic narrative connecting all 4 frameworks
+- **keyStrength**: The single most important strength (one sentence)
+- **keyChallenge**: The single most important challenge (one sentence)
+
+## Required JSON Format (respond with ONLY valid JSON):
 {
   "businessModel": {
     "headline": "...",
-    "keyFindings": ["...", "...", "..."],
+    "storyCards": [
+      { "label": "WHO WE SERVE", "summary": "..." },
+      { "label": "HOW WE DELIVER", "summary": "..." },
+      { "label": "WHAT IT GENERATES", "summary": "..." }
+    ],
     "synthesis": "..."
   },
   "fiveForces": {
     "headline": "...",
-    "keyFindings": ["...", "...", "..."],
+    "storyCards": [
+      { "label": "BIGGEST THREAT", "summary": "..." },
+      { "label": "COMPETITIVE LANDSCAPE", "summary": "..." },
+      { "label": "WHERE WE'RE SHIELDED", "summary": "..." }
+    ],
     "synthesis": "..."
   },
   "vrio": {
     "headline": "...",
-    "keyFindings": ["...", "...", "..."],
+    "storyCards": [
+      { "label": "WHAT'S VALUABLE", "summary": "..." },
+      { "label": "WHAT'S TRULY RARE", "summary": "..." },
+      { "label": "WHAT'S HARD TO COPY", "summary": "..." },
+      { "label": "HOW WE'RE ORGANIZED", "summary": "..." }
+    ],
     "synthesis": "..."
   },
   "swot": {
     "headline": "...",
-    "keyFindings": ["...", "...", "..."],
+    "storyCards": [
+      { "label": "WHERE WE'RE STRONG", "summary": "..." },
+      { "label": "WHERE WE'RE EXPOSED", "summary": "..." },
+      { "label": "WHAT'S AHEAD", "summary": "..." },
+      { "label": "WHAT'S AT RISK", "summary": "..." }
+    ],
     "synthesis": "..."
   },
   "overallSynthesis": "...",
@@ -170,7 +190,7 @@ Also generate:
 }
 
 // ════════════════════════════════════════
-// Build PPTX (server-side)
+// Build PPTX
 // ════════════════════════════════════════
 async function buildPPTX(
   slideContent: any,
@@ -246,6 +266,24 @@ async function buildPPTX(
 
   addFooter(slide1, pptx, businessName, ownerName);
 
+  // ── Icon map for story cards ──
+  const iconMap: Record<string, string> = {
+    "WHO WE SERVE": "\uD83D\uDC65",        // 👥
+    "HOW WE DELIVER": "\u2699\uFE0F",       // ⚙️
+    "WHAT IT GENERATES": "\uD83D\uDCB0",    // 💰
+    "BIGGEST THREAT": "\u26A0\uFE0F",        // ⚠️
+    "COMPETITIVE LANDSCAPE": "\u2694\uFE0F", // ⚔️
+    "WHERE WE'RE SHIELDED": "\uD83D\uDEE1\uFE0F", // 🛡️
+    "WHAT'S VALUABLE": "\uD83D\uDCA1",      // 💡
+    "WHAT'S TRULY RARE": "\uD83D\uDC8E",    // 💎
+    "WHAT'S HARD TO COPY": "\uD83D\uDD12",  // 🔒
+    "HOW WE'RE ORGANIZED": "\uD83C\uDFD7\uFE0F", // 🏗️
+    "WHERE WE'RE STRONG": "\uD83D\uDCAA",   // 💪
+    "WHERE WE'RE EXPOSED": "\uD83D\uDD34",  // 🔴
+    "WHAT'S AHEAD": "\uD83D\uDE80",         // 🚀
+    "WHAT'S AT RISK": "\u26A1",              // ⚡
+  };
+
   // ══════════════════════════════
   // SLIDE 2: BUSINESS MODEL
   // ══════════════════════════════
@@ -255,66 +293,42 @@ async function buildPPTX(
     accentColor: CLR.blue,
     accentLight: CLR.blue50,
     headline: slideContent.businessModel?.headline || "Business Model Overview",
-    keyFindings: slideContent.businessModel?.keyFindings || [],
+    storyCards: (slideContent.businessModel?.storyCards || []).map((c: any) => ({
+      ...c, icon: iconMap[c.label] || "\u2726",
+    })),
     synthesis: slideContent.businessModel?.synthesis || "",
-    scores: [
-      { label: "Value Proposition", value: starsText(aiScores.businessModel.valueProposition.score), barPct: (aiScores.businessModel.valueProposition.score / 5) * 100, barColor: getBarColor(aiScores.businessModel.valueProposition.score, 5) },
-      { label: "Value Architecture", value: starsText(aiScores.businessModel.valueArchitecture.score), barPct: (aiScores.businessModel.valueArchitecture.score / 5) * 100, barColor: getBarColor(aiScores.businessModel.valueArchitecture.score, 5) },
-      { label: "Contributions", value: starsText(aiScores.businessModel.contributions.score), barPct: (aiScores.businessModel.contributions.score / 5) * 100, barColor: getBarColor(aiScores.businessModel.contributions.score, 5) },
-    ],
     businessName, ownerName,
   });
 
   // ══════════════════════════════
   // SLIDE 3: FIVE FORCES
   // ══════════════════════════════
-  const forces = [
-    { label: "New Entrants", severity: aiScores.fiveForces.newEntrants.severity },
-    { label: "Suppliers", severity: aiScores.fiveForces.suppliers.severity },
-    { label: "Rivalry", severity: aiScores.fiveForces.rivalry.severity },
-    { label: "Buyers", severity: aiScores.fiveForces.buyers.severity },
-    { label: "Substitutes", severity: aiScores.fiveForces.substitutes.severity },
-  ];
   buildFrameworkSlide(pptx, {
     frameworkLabel: "COMPETITIVE PRESSURE",
     frameworkSub: "Porter's 5 Forces",
     accentColor: CLR.red,
     accentLight: CLR.red50,
     headline: slideContent.fiveForces?.headline || "External Competitive Landscape",
-    keyFindings: slideContent.fiveForces?.keyFindings || [],
-    synthesis: slideContent.fiveForces?.synthesis || "",
-    scores: forces.map(f => ({
-      label: f.label,
-      value: `${f.severity}/10`,
-      barPct: (f.severity / 10) * 100,
-      barColor: getThreatColor(f.severity),
+    storyCards: (slideContent.fiveForces?.storyCards || []).map((c: any) => ({
+      ...c, icon: iconMap[c.label] || "\u2726",
     })),
+    synthesis: slideContent.fiveForces?.synthesis || "",
     businessName, ownerName,
   });
 
   // ══════════════════════════════
   // SLIDE 4: VRIO
   // ══════════════════════════════
-  const vrioItems = [
-    { label: "Valuable", strength: aiScores.vrio.valuable.strength },
-    { label: "Rare", strength: aiScores.vrio.rare.strength },
-    { label: "Inimitable", strength: aiScores.vrio.inimitable.strength },
-    { label: "Organized", strength: aiScores.vrio.organized.strength },
-  ];
   buildFrameworkSlide(pptx, {
     frameworkLabel: "RESOURCE ADVANTAGE",
     frameworkSub: "VRIO Framework",
     accentColor: CLR.emerald,
     accentLight: CLR.emerald50,
     headline: slideContent.vrio?.headline || "Internal Resource Analysis",
-    keyFindings: slideContent.vrio?.keyFindings || [],
-    synthesis: slideContent.vrio?.synthesis || "",
-    scores: vrioItems.map(v => ({
-      label: v.label,
-      value: `${v.strength}/5`,
-      barPct: (v.strength / 5) * 100,
-      barColor: getBarColor(v.strength, 5),
+    storyCards: (slideContent.vrio?.storyCards || []).map((c: any) => ({
+      ...c, icon: iconMap[c.label] || "\u2726",
     })),
+    synthesis: slideContent.vrio?.synthesis || "",
     businessName, ownerName,
   });
 
@@ -327,14 +341,10 @@ async function buildPPTX(
     accentColor: CLR.amber,
     accentLight: CLR.amber50,
     headline: slideContent.swot?.headline || "Strategic Position Summary",
-    keyFindings: slideContent.swot?.keyFindings || [],
+    storyCards: (slideContent.swot?.storyCards || []).map((c: any) => ({
+      ...c, icon: iconMap[c.label] || "\u2726",
+    })),
     synthesis: slideContent.swot?.synthesis || "",
-    scores: [
-      { label: "Strengths", value: `${aiScores.swot.strengthsWeight}/10`, barPct: aiScores.swot.strengthsWeight * 10, barColor: CLR.emerald },
-      { label: "Weaknesses", value: `${aiScores.swot.weaknessesWeight}/10`, barPct: aiScores.swot.weaknessesWeight * 10, barColor: CLR.red },
-      { label: "Opportunities", value: `${aiScores.swot.opportunitiesWeight}/10`, barPct: aiScores.swot.opportunitiesWeight * 10, barColor: CLR.blue },
-      { label: "Threats", value: `${aiScores.swot.threatsWeight}/10`, barPct: aiScores.swot.threatsWeight * 10, barColor: CLR.orange },
-    ],
     businessName, ownerName,
   });
 
@@ -357,8 +367,7 @@ async function buildPPTX(
   // Overall synthesis
   slide6.addText(slideContent.overallSynthesis || "", {
     x: 0.8, y: 1.4, w: 8.4, h: 0.8,
-    fontSize: 14, fontFace: "Arial", color: CLR.slate400,
-    italic: true,
+    fontSize: 14, fontFace: "Arial", color: CLR.slate400, italic: true,
   });
 
   // Key Strength box
@@ -412,7 +421,7 @@ async function buildPPTX(
 }
 
 // ════════════════════════════════════════
-// Framework slide template (findings-focused)
+// Framework slide template (story cards)
 // ════════════════════════════════════════
 interface FrameworkConfig {
   frameworkLabel: string;
@@ -420,9 +429,8 @@ interface FrameworkConfig {
   accentColor: string;
   accentLight: string;
   headline: string;
-  keyFindings: string[];
+  storyCards: StoryCard[];
   synthesis: string;
-  scores: ScoreItem[];
   businessName: string;
   ownerName: string;
 }
@@ -434,7 +442,7 @@ function buildFrameworkSlide(pptx: PptxGenJS, cfg: FrameworkConfig) {
   // Top accent bar
   slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 0.08, fill: { color: cfg.accentColor } });
 
-  // Framework label + sub
+  // Framework label + sub (full width)
   slide.addText(cfg.frameworkLabel, {
     x: 0.6, y: 0.3, w: 5, h: 0.35,
     fontSize: 11, fontFace: "Arial", color: cfg.accentColor, bold: true,
@@ -444,97 +452,97 @@ function buildFrameworkSlide(pptx: PptxGenJS, cfg: FrameworkConfig) {
     fontSize: 10, fontFace: "Arial", color: CLR.slate400,
   });
 
-  // ── LEFT: Score card ──
-  const scoreStartY = 1.1;
-  const scoreW = 4.0;
-  const cardH = cfg.scores.length * 0.55 + 0.3;
-
-  slide.addShape(pptx.ShapeType.roundRect, {
-    x: 0.5, y: scoreStartY - 0.1, w: scoreW, h: cardH,
-    fill: { color: CLR.slate100 }, rectRadius: 0.1,
-    line: { color: CLR.slate200, width: 0.5 },
-  });
-
-  cfg.scores.forEach((item, i) => {
-    const itemY = scoreStartY + i * 0.55;
-
-    slide.addText(item.label, {
-      x: 0.7, y: itemY, w: 1.8, h: 0.25,
-      fontSize: 10, fontFace: "Arial", color: CLR.slate700, bold: true,
-    });
-    slide.addText(item.value, {
-      x: 2.5, y: itemY, w: 1.0, h: 0.25,
-      fontSize: 10, fontFace: "Arial", color: item.barColor, bold: true, align: "right",
-    });
-
-    // Bar bg
-    slide.addShape(pptx.ShapeType.roundRect, {
-      x: 0.7, y: itemY + 0.28, w: 3.5, h: 0.12,
-      fill: { color: CLR.slate200 }, rectRadius: 0.06,
-    });
-    // Bar fill
-    if (item.barPct > 0) {
-      slide.addShape(pptx.ShapeType.roundRect, {
-        x: 0.7, y: itemY + 0.28, w: Math.max(0.12, 3.5 * (item.barPct / 100)), h: 0.12,
-        fill: { color: item.barColor }, rectRadius: 0.06,
-      });
-    }
-  });
-
-  // ── RIGHT: Headline + Key Findings + Synthesis ──
-  const rightX = 5.0;
-  const rightW = 4.6;
-
-  // Headline
+  // Headline (full width, right-aligned area)
   slide.addText("\u2726", {
-    x: rightX, y: 1.05, w: 0.3, h: 0.35,
-    fontSize: 16, color: cfg.accentColor,
+    x: 5.0, y: 0.3, w: 0.3, h: 0.35,
+    fontSize: 14, color: cfg.accentColor,
   });
   slide.addText(cfg.headline, {
-    x: rightX + 0.3, y: 1.05, w: rightW - 0.3, h: 0.6,
-    fontSize: 16, fontFace: "Arial", color: CLR.darkSlate, bold: true,
+    x: 5.3, y: 0.3, w: 4.3, h: 0.55,
+    fontSize: 14, fontFace: "Arial", color: CLR.darkSlate, bold: true,
     valign: "top",
   });
 
-  // Key Findings header
-  slide.addText("KEY FINDINGS", {
-    x: rightX, y: 1.85, w: rightW, h: 0.25,
-    fontSize: 9, fontFace: "Arial", color: cfg.accentColor, bold: true,
-  });
+  // ── STORY CARDS (left side, stacked vertically) ──
+  const cardX = 0.5;
+  const cardW = 4.3;
+  const cards = (cfg.storyCards || []).slice(0, 4);
+  const cardCount = cards.length;
+  // Dynamic card height based on number of cards
+  const totalH = 3.7; // available height for cards
+  const cardGap = 0.1;
+  const cardH = (totalH - (cardCount - 1) * cardGap) / cardCount;
+  const startY = 1.1;
 
-  // Bullet points
-  const findings = (cfg.keyFindings || []).slice(0, 3);
-  findings.forEach((finding, i) => {
-    const bulletY = 2.15 + i * 0.45;
+  cards.forEach((card, i) => {
+    const cy = startY + i * (cardH + cardGap);
 
-    // Bullet dot
-    slide.addShape(pptx.ShapeType.ellipse, {
-      x: rightX + 0.05, y: bulletY + 0.07, w: 0.1, h: 0.1,
+    // Card background
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: cardX, y: cy, w: cardW, h: cardH,
+      fill: { color: CLR.slate100 }, rectRadius: 0.08,
+      line: { color: CLR.slate200, width: 0.5 },
+    });
+
+    // Accent left strip
+    slide.addShape(pptx.ShapeType.rect, {
+      x: cardX, y: cy, w: 0.06, h: cardH,
       fill: { color: cfg.accentColor },
     });
 
-    // Bullet text
-    slide.addText(finding, {
-      x: rightX + 0.25, y: bulletY, w: rightW - 0.25, h: 0.4,
-      fontSize: 12, fontFace: "Arial", color: CLR.slate700,
+    // Icon
+    slide.addText(card.icon || "\u2726", {
+      x: cardX + 0.15, y: cy + 0.05, w: 0.35, h: 0.3,
+      fontSize: 14,
+    });
+
+    // Label
+    slide.addText(card.label, {
+      x: cardX + 0.5, y: cy + 0.08, w: cardW - 0.7, h: 0.22,
+      fontSize: 8, fontFace: "Arial", color: cfg.accentColor, bold: true,
+    });
+
+    // Summary text
+    slide.addText(card.summary, {
+      x: cardX + 0.5, y: cy + 0.32, w: cardW - 0.7, h: cardH - 0.4,
+      fontSize: 11, fontFace: "Arial", color: CLR.slate700,
       valign: "top",
     });
   });
 
-  // Synthesis card at bottom
-  const synthY = 3.55;
+  // ── RIGHT SIDE: Synthesis ──
+  const rightX = 5.0;
+  const rightW = 4.6;
+
+  // "SO WHAT?" synthesis card
+  const synthY = 1.1;
   slide.addShape(pptx.ShapeType.roundRect, {
-    x: rightX - 0.1, y: synthY, w: rightW + 0.2, h: 0.85,
+    x: rightX - 0.1, y: synthY, w: rightW + 0.2, h: 1.0,
     fill: { color: cfg.accentLight }, rectRadius: 0.1,
   });
-  slide.addText("SO WHAT?", {
-    x: rightX, y: synthY + 0.05, w: rightW, h: 0.2,
+  slide.addText("SO WHAT DOES THIS MEAN?", {
+    x: rightX, y: synthY + 0.08, w: rightW, h: 0.2,
     fontSize: 8, fontFace: "Arial", color: cfg.accentColor, bold: true,
   });
   slide.addText(cfg.synthesis, {
-    x: rightX, y: synthY + 0.25, w: rightW, h: 0.55,
-    fontSize: 11, fontFace: "Arial", color: CLR.darkSlate,
+    x: rightX, y: synthY + 0.3, w: rightW, h: 0.65,
+    fontSize: 12, fontFace: "Arial", color: CLR.darkSlate,
     valign: "top",
+  });
+
+  // Presenter note area (subtle guide for what to SAY)
+  const noteY = 2.4;
+  slide.addShape(pptx.ShapeType.line, {
+    x: rightX, y: noteY, w: rightW, h: 0,
+    line: { color: CLR.slate200, width: 0.5, dashType: "dash" },
+  });
+  slide.addText("PRESENTER NOTES", {
+    x: rightX, y: noteY + 0.15, w: rightW, h: 0.2,
+    fontSize: 7, fontFace: "Arial", color: CLR.slate400, bold: true,
+  });
+  slide.addText("Use the story cards on the left as anchors.\nRead the label, then elaborate with your own\nknowledge and examples.", {
+    x: rightX, y: noteY + 0.4, w: rightW, h: 0.8,
+    fontSize: 9, fontFace: "Arial", color: CLR.slate400, italic: true,
   });
 
   addFooter(slide, pptx, cfg.businessName, cfg.ownerName);
