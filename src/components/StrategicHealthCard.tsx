@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Shield, Swords, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Sparkles, Loader2, Star, TrendingUp, TrendingDown, AlertTriangle, FileDown } from "lucide-react";
+import { Shield, Swords, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Sparkles, Loader2, Star, TrendingUp, TrendingDown, AlertTriangle, FileDown, Presentation } from "lucide-react";
 import { generateReportPDF } from "@/lib/generateReportPDF";
 import clsx from "clsx";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -29,6 +29,7 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [generatingSlides, setGeneratingSlides] = useState(false);
   const hasFetched = useRef(false);
 
   const saveToFirestore = async (data: AIAnalysis) => {
@@ -305,7 +306,7 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           </div>
         </div>
 
-        <div className="px-6 py-3 border-t border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
           <button
             onClick={runAnalysis}
             disabled={analyzing}
@@ -350,6 +351,42 @@ export default function StrategicHealthCard({ analysis, shareCode }: StrategicHe
           >
             {generatingReport ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
             {generatingReport ? "Generating Report..." : "Download Full Report"}
+          </button>
+          <button
+            onClick={async () => {
+              if (!aiData) return;
+              setGeneratingSlides(true);
+              try {
+                const res = await fetch("/api/generate-slides", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ analysis, aiScores: aiData }),
+                });
+                if (!res.ok) {
+                  const errData = await res.json().catch(() => ({ error: "Slide generation failed" }));
+                  throw new Error(errData.error || "Slide generation failed");
+                }
+                // Download the binary PPTX file
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${analysis.businessName.replace(/[^a-zA-Z0-9]/g, "_")}_Strategy_Slides.pptx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+              } catch (err) {
+                console.error("Slide generation error:", err);
+                alert("Failed to generate slides. Please try again.");
+              }
+              setGeneratingSlides(false);
+            }}
+            disabled={generatingSlides || !aiData}
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+          >
+            {generatingSlides ? <Loader2 className="h-3 w-3 animate-spin" /> : <Presentation className="h-3 w-3" />}
+            {generatingSlides ? "Generating Slides..." : "Download Slides"}
           </button>
         </div>
       </div>
