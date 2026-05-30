@@ -534,7 +534,7 @@ export default function AdminDashboard() {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">GALP Admin Dashboard</h1>
-              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.8-dev</span>
+              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v9.0</span>
             </div>
             <p className="text-sm text-slate-500 ml-8">Monitor participant progress and manage accounts.</p>
           </div>
