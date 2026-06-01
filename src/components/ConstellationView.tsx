@@ -293,23 +293,23 @@ function computeAIPosition(card: HealthCard): { x: number; y: number } {
     const bmNorm = (bmTotal / 15) * 100;
     strengthScore = (vrioNorm * 0.6) + (bmNorm * 0.4);
     const forcesTotal = ai.fiveForces.newEntrants.severity + ai.fiveForces.suppliers.severity + ai.fiveForces.rivalry.severity + ai.fiveForces.buyers.severity + ai.fiveForces.substitutes.severity;
-    dynamismScore = (forcesTotal / 50) * 100;
+    dynamismScore = 100 - (forcesTotal / 50) * 100; // Invert: high = favorable (low intensity), low = unfavorable (high intensity)
   } else {
     const vrioMet = [card.vrio.valuable.populated, card.vrio.rare.populated, card.vrio.inimitable.populated, card.vrio.organized.populated].filter(Boolean).length;
     const bmPoints = card.businessModel.valueProposition.points.length + card.businessModel.valueArchitecture.points.length + card.businessModel.contributions.points.length;
     const fiveTotal = card.fiveForces.newEntrants.points.length + card.fiveForces.suppliers.points.length + card.fiveForces.rivalry.points.length + card.fiveForces.buyers.points.length + card.fiveForces.substitutes.points.length;
     strengthScore = (vrioMet / 4) * 60 + Math.min(bmPoints / 10, 1) * 40;
-    dynamismScore = Math.min(fiveTotal / 25, 1) * 100;
+    dynamismScore = 100 - Math.min(fiveTotal / 25, 1) * 100; // Invert: high = favorable, low = unfavorable
   }
 
   return { x: Math.max(5, Math.min(95, strengthScore)), y: Math.max(5, Math.min(95, dynamismScore)) };
 }
 
 function getQuadrantLabel(x: number, y: number): string {
-  if (x >= 50 && y >= 50) return "Growth";
-  if (x >= 50 && y < 50) return "Core";
-  if (x < 50 && y >= 50) return "Restructuring";
-  return "Nurturing";
+  if (x >= 50 && y >= 50) return "Growth";      // Strong + Favorable = Growth Business
+  if (x >= 50 && y < 50) return "Core";          // Strong + Unfavorable = Core Business
+  if (x < 50 && y >= 50) return "Nurturing";     // Weak + Favorable = Nurturing
+  return "Restructuring";                         // Weak + Unfavorable = Restructuring
 }
 
 // ═══════════════════════════════════════
@@ -574,9 +574,9 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             {/* Y-axis label */}
             <div className="absolute -left-1 top-0 bottom-0 flex items-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
-                <span className="font-normal opacity-60">STABLE</span>
-                <span>← Market Dynamism (5 Forces) →</span>
-                <span className="font-normal opacity-60">INTENSE</span>
+                <span className="font-normal opacity-60">UNFAVORABLE</span>
+                <span>← Market Environment (5 Forces) →</span>
+                <span className="font-normal opacity-60">FAVORABLE</span>
               </span>
             </div>
 
@@ -593,17 +593,17 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             <div ref={gridRef} className="absolute left-8 top-0 right-0 bottom-6 border-l-2 border-b-2 border-slate-200">
               {/* Quadrant backgrounds */}
               <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-                <div className="bg-amber-50/60 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
-                  <span className="text-[10px] font-bold text-amber-600/80">⚠️ Restructuring</span>
-                  <span className="text-[8px] text-amber-500/70 mt-0.5">Reevaluate &amp; reallocate</span>
+                <div className="bg-emerald-50/40 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
+                  <span className="text-[10px] font-bold text-emerald-600/80">🌱 Nurturing</span>
+                  <span className="text-[8px] text-emerald-500/70 mt-0.5">Build for the future</span>
                 </div>
                 <div className="bg-blue-50/60 border-b border-dashed border-slate-200 p-3 flex flex-col items-end">
                   <span className="text-[10px] font-bold text-blue-600/80">🚀 Growth Business</span>
                   <span className="text-[8px] text-blue-500/70 mt-0.5">Accelerate &amp; expand</span>
                 </div>
-                <div className="bg-emerald-50/40 border-r border-dashed border-slate-200 p-3 flex flex-col justify-end">
-                  <span className="text-[8px] text-emerald-500/70 mb-0.5">Build for the future</span>
-                  <span className="text-[10px] font-bold text-emerald-600/80">🌱 Nurturing</span>
+                <div className="bg-amber-50/60 border-r border-dashed border-slate-200 p-3 flex flex-col justify-end">
+                  <span className="text-[8px] text-amber-500/70 mb-0.5">Reevaluate &amp; reallocate</span>
+                  <span className="text-[10px] font-bold text-amber-600/80">⚠️ Restructuring</span>
                 </div>
                 <div className="bg-slate-50/60 p-3 flex flex-col items-end justify-end">
                   <span className="text-[8px] text-slate-400 mb-0.5">Improve efficiency</span>

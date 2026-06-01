@@ -284,7 +284,7 @@ Rules:
 
 A team is mapping their businesses on a 2×2 Strategic Portfolio Grid:
 - X-axis: Competitive Strength (VRIO + Business Model) — 0% (Weak) to 100% (Strong)
-- Y-axis: Market Dynamism (5 Forces intensity) — 0% (Stable) to 100% (Intense/High Change)
+- Y-axis: Market Environment (5 Forces) — 0% (Unfavorable/High competitive intensity) to 100% (Favorable/Low competitive intensity)
 
 The member "${targetCard.ownerName}" (${targetCard.businessName}) placed themselves at: ${selfQ}
 
