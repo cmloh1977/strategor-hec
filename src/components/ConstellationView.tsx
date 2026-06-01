@@ -818,15 +818,16 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                     {/* Size slider during adjustment */}
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-semibold text-slate-600">📏 Growth Potential</label>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {localBubbleSize <= 2 ? "Niche" : localBubbleSize <= 4 ? "Emerging" : localBubbleSize <= 6 ? "Established" : localBubbleSize <= 8 ? "Major" : "Dominant"}
-                      </span>
                     </div>
                     <input
                       type="range" min={1} max={10} value={localBubbleSize}
                       onChange={(e) => setLocalBubbleSize(Number(e.target.value))}
                       className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                     />
+                    <div className="flex justify-between text-[8px] text-slate-300 px-0.5">
+                      <span>Low</span>
+                      <span>High</span>
+                    </div>
                     <p className="text-[9px] text-amber-600 font-medium">↕ Drag your bubble to reposition, adjust size above</p>
                     <div className="flex gap-2">
                       <button
@@ -882,7 +883,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               Your Placement
             </h4>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              Drag your icon on the grid. Think about where your business honestly sits in terms of <strong>competitive strength</strong> and <strong>market dynamism</strong>.
+              Drag your icon on the grid. Think about where your business honestly sits in terms of <strong>competitive strength</strong> and <strong>market environment</strong>.
             </p>
             {activeDragPos && (
               <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2">
@@ -893,9 +894,6 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-semibold text-slate-600">📏 Growth Potential</label>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {localBubbleSize <= 2 ? "Niche" : localBubbleSize <= 4 ? "Emerging" : localBubbleSize <= 6 ? "Established" : localBubbleSize <= 8 ? "Major" : "Dominant"}
-                </span>
               </div>
               <input
                 type="range"
@@ -907,8 +905,8 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <div className="flex justify-between text-[8px] text-slate-300 px-0.5">
-                <span>Niche</span>
-                <span>Dominant</span>
+                <span>Low</span>
+                <span>High</span>
               </div>
             </div>
             <textarea
