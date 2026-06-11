@@ -258,7 +258,7 @@ export default function AdminDashboard() {
         const res = await fetch("/api/admin", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "list" }),
+          body: JSON.stringify({ action: "list", adminEmail: user?.email }),
         });
         if (res.ok) {
           const data = await res.json();
