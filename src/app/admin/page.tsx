@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { MASTER_EMAIL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter, Pencil, Check, X, MessageSquare } from "lucide-react";
+import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter, Pencil, Check, X, MessageSquare, Clock } from "lucide-react";
 import clsx from "clsx";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, deleteUser, signOut } from "firebase/auth";
@@ -79,6 +79,7 @@ interface ParticipantProgress {
   status: "Not Started" | "In Progress" | "Completed";
   currentModule: string;
   engagement: EngagementMetrics;
+  lastLogin: string | null;
 }
 
 const CHAT_MODULES = ["business-model", "external-analysis", "internal-analysis", "swot-synthesis"];
@@ -250,14 +251,31 @@ export default function AdminDashboard() {
       snap.forEach((d) => list.push(d.data() as UserRecord));
       list.sort((a, b) => a.email.localeCompare(b.email));
       setUsers(list);
-      await loadProgress(list);
+
+      // Fetch lastSignIn from admin API
+      let lastSignInMap: Record<string, string> = {};
+      try {
+        const res = await fetch("/api/admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list" }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          for (const u of data.users || []) {
+            if (u.lastSignIn) lastSignInMap[u.uid] = u.lastSignIn;
+          }
+        }
+      } catch (_) { /* non-critical */ }
+
+      await loadProgress(list, lastSignInMap);
     } catch (e) {
       console.error("Failed to load users:", e);
     }
     setLoadingUsers(false);
   };
 
-  const loadProgress = async (userList: UserRecord[]) => {
+  const loadProgress = async (userList: UserRecord[], lastSignInMap: Record<string, string> = {}) => {
     setLoadingProgress(true);
     const results: ParticipantProgress[] = [];
 
@@ -294,6 +312,7 @@ export default function AdminDashboard() {
           status: prog.status,
           currentModule: prog.currentModule,
           engagement,
+          lastLogin: lastSignInMap[u.uid] || null,
         });
       } catch (e) {
         console.error(`Failed to load progress for ${u.email}:`, e);
@@ -305,6 +324,7 @@ export default function AdminDashboard() {
           status: "Not Started",
           currentModule: "—",
           engagement: emptyEngagement,
+          lastLogin: lastSignInMap[u.uid] || null,
         });
       }
     }
@@ -728,8 +748,8 @@ export default function AdminDashboard() {
                       {/* Engagement Score */}
                       <EngagementBadge engagement={p.engagement} />
 
-                      {/* Business name */}
-                      <div className="w-32 flex-shrink-0 text-right">
+                      {/* Business name + Last Login */}
+                      <div className="w-36 flex-shrink-0 text-right">
                         {p.portfolio?.myAnalysis ? (
                           <p className="text-xs font-medium text-slate-600 truncate">{p.portfolio.myAnalysis.businessName}</p>
                         ) : (
@@ -738,6 +758,10 @@ export default function AdminDashboard() {
                         {p.portfolio?.shareCode && (
                           <p className="text-[10px] font-mono text-indigo-500 mt-0.5">Code: {p.portfolio.shareCode}</p>
                         )}
+                        <p className="flex items-center justify-end gap-1 text-[10px] text-slate-400 mt-0.5">
+                          <Clock className="h-2.5 w-2.5" />
+                          {p.lastLogin ? new Date(p.lastLogin).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                        </p>
                       </div>
                     </div>
                   </div>
