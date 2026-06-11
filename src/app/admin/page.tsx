@@ -205,6 +205,12 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Bulk delete
+  const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{ current: number; total: number } | null>(null);
+
   // Reset password
   const [resetTarget, setResetTarget] = useState<UserRecord | null>(null);
   const [resetPass, setResetPass] = useState("");
@@ -457,6 +463,56 @@ export default function AdminDashboard() {
       alert("Delete failed: " + err.message);
     }
     setDeleting(false);
+  };
+
+  const handleBulkDelete = async () => {
+    const toDelete = users.filter(u => selectedUids.has(u.uid));
+    if (toDelete.length === 0) return;
+    setBulkDeleting(true);
+    setBulkDeleteProgress({ current: 0, total: toDelete.length });
+    const errors: string[] = [];
+    for (let i = 0; i < toDelete.length; i++) {
+      const record = toDelete[i];
+      setBulkDeleteProgress({ current: i + 1, total: toDelete.length });
+      let secondaryApp: any = null;
+      try {
+        const { auth: secondaryAuth, app } = getSecondaryAuth();
+        secondaryApp = app;
+        if (record.password) {
+          const cred = await signInWithEmailAndPassword(secondaryAuth, record.email, record.password);
+          await deleteUser(cred.user);
+        }
+        try { await deleteApp(app); secondaryApp = null; } catch (_) {}
+        await deleteDoc(doc(db, "_admin_users", record.uid));
+      } catch (err: any) {
+        if (secondaryApp) { try { await deleteApp(secondaryApp); } catch (_) {} }
+        errors.push(`${record.email}: ${err.message}`);
+      }
+    }
+    if (errors.length > 0) {
+      alert(`Bulk delete completed with ${errors.length} error(s):\n${errors.join("\n")}`);
+    }
+    setSelectedUids(new Set());
+    setBulkDeleteConfirm(false);
+    setBulkDeleteProgress(null);
+    setBulkDeleting(false);
+    await loadUsers();
+  };
+
+  const toggleSelectUser = (uid: string) => {
+    setSelectedUids(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUids.size === filteredUsers.length) {
+      setSelectedUids(new Set());
+    } else {
+      setSelectedUids(new Set(filteredUsers.map(u => u.uid)));
+    }
   };
 
   const handleResetPassword = async (record: UserRecord) => {
@@ -808,7 +864,18 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
                 <Users className="h-5 w-5 text-indigo-600" />
                 <h2 className="font-bold text-slate-800">Registered Users</h2>
-                <span className="ml-auto text-xs text-slate-400 font-medium">{filteredUsers.length} users</span>
+                <div className="ml-auto flex items-center gap-3">
+                  {selectedUids.size > 0 && (
+                    <button
+                      onClick={() => setBulkDeleteConfirm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 border border-red-200 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete Selected ({selectedUids.size})
+                    </button>
+                  )}
+                  <span className="text-xs text-slate-400 font-medium">{filteredUsers.length} users</span>
+                </div>
               </div>
               {loadingUsers ? (
                 <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></div>
@@ -818,6 +885,14 @@ export default function AdminDashboard() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                     <tr>
+                      <th className="px-3 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={filteredUsers.length > 0 && selectedUids.size === filteredUsers.length}
+                          onChange={toggleSelectAll}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </th>
                       <th className="px-6 py-3">User</th>
                       <th className="px-6 py-3">Cohort</th>
                       <th className="px-6 py-3">Password</th>
@@ -829,7 +904,15 @@ export default function AdminDashboard() {
                     {filteredUsers.map((u) => {
                       const status = getUserStatus(u);
                       return (
-                        <tr key={u.uid} className="hover:bg-slate-50/50 transition-colors">
+                        <tr key={u.uid} className={clsx("hover:bg-slate-50/50 transition-colors", selectedUids.has(u.uid) && "bg-indigo-50/50")}>
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedUids.has(u.uid)}
+                              onChange={() => toggleSelectUser(u.uid)}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          </td>
                           <td className="px-6 py-3">
                             <div className="flex items-center gap-2">
                               {/* Status icon */}
@@ -901,8 +984,39 @@ export default function AdminDashboard() {
               <p className="text-sm text-slate-500 mb-4">Delete <strong>{deleteTarget.email}</strong>? This cannot be undone.</p>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Cancel</button>
-                <button onClick={() => handleDelete(deleteTarget)} disabled={deleting} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-red-700 disabled:opacity-50">
+                <button onClick={() => handleDelete(deleteTarget)} disabled={deleting} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
                   {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Yes, Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Delete Confirmation Modal */}
+        {bulkDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-slate-900 mb-2">Delete {selectedUids.size} Users?</h3>
+              <p className="text-sm text-slate-500 mb-3">This will permanently delete the following accounts:</p>
+              <div className="bg-slate-50 rounded-xl p-3 max-h-40 overflow-y-auto mb-4 border border-slate-200">
+                {users.filter(u => selectedUids.has(u.uid)).map(u => (
+                  <p key={u.uid} className="text-xs text-slate-600 py-0.5">{u.name ? `${u.name} (${u.email})` : u.email}</p>
+                ))}
+              </div>
+              {bulkDeleteProgress && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${(bulkDeleteProgress.current / bulkDeleteProgress.total) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-600">{bulkDeleteProgress.current}/{bulkDeleteProgress.total}</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setBulkDeleteConfirm(false)} disabled={bulkDeleting} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button onClick={handleBulkDelete} disabled={bulkDeleting} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+                  {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : `Yes, Delete All (${selectedUids.size})`}
                 </button>
               </div>
             </div>
