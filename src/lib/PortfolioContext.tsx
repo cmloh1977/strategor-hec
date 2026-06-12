@@ -39,6 +39,19 @@ export interface SwotState {
   threats: PillarData;
 }
 
+// ── Value Curve ──
+export interface ValueCurveFactor {
+  name: string;
+  myScore: number;
+  competitors: Record<string, number>; // competitor name → score (1-10)
+}
+
+export interface ValueCurveState {
+  factors: ValueCurveFactor[];
+  competitors: string[];
+  populated: boolean;
+}
+
 export interface AIAnalysis {
   businessModel: {
     valueProposition: { score: number; insight: string };
@@ -83,6 +96,7 @@ export interface HealthCard {
   color: string;
   businessModel: BusinessModelState;
   fiveForces: FiveForcesState;
+  valueCurve?: ValueCurveState;
   vrio: VrioState;
   swot: SwotState;
   industryAttractiveness: number;
@@ -128,6 +142,7 @@ export interface MyAnalysis {
   difficultyLevel: DifficultyLevel;
   businessModel: BusinessModelState;
   fiveForces: FiveForcesState;
+  valueCurve: ValueCurveState;
   vrio: VrioState;
   swot: SwotState;
 }
@@ -154,6 +169,9 @@ const INIT_VRIO: VrioState = {
 const INIT_SWOT: SwotState = {
   strengths: emptyPillar, weaknesses: emptyPillar, opportunities: emptyPillar, threats: emptyPillar,
 };
+const INIT_VC: ValueCurveState = {
+  factors: [], competitors: [], populated: false,
+};
 
 const COLORS = ["#E8634A", "#1EB5C4", "#6366f1", "#f59e0b", "#10b981"];
 
@@ -167,6 +185,7 @@ function computeIsComplete(a: MyAnalysis): boolean {
     a.fiveForces.rivalry.populated &&
     a.fiveForces.buyers.populated &&
     a.fiveForces.substitutes.populated &&
+    (a.valueCurve?.populated ?? false) &&
     a.vrio.valuable.populated &&
     a.vrio.rare.populated &&
     a.vrio.inimitable.populated &&
@@ -207,7 +226,7 @@ function generateCode(): string {
 }
 
 function getProgress(a: MyAnalysis): { done: number; total: number; percent: number } {
-  const total = 16;
+  const total = 17;
   let done = 0;
   if (a.businessModel.valueProposition.populated) done++;
   if (a.businessModel.valueArchitecture.populated) done++;
@@ -217,6 +236,7 @@ function getProgress(a: MyAnalysis): { done: number; total: number; percent: num
   if (a.fiveForces.rivalry.populated) done++;
   if (a.fiveForces.buyers.populated) done++;
   if (a.fiveForces.substitutes.populated) done++;
+  if (a.valueCurve?.populated) done++;
   if (a.vrio.valuable.populated) done++;
   if (a.vrio.rare.populated) done++;
   if (a.vrio.inimitable.populated) done++;
@@ -238,6 +258,7 @@ interface PortfolioContextType {
   resetAnalysis: () => void;
   setDiagramLanguage: (lang: AppLanguage) => void;
   populatePillar: (module: "businessModel" | "fiveForces" | "vrio" | "swot", pillar: string, points: string[]) => void;
+  updateValueCurve: (state: ValueCurveState) => void;
   myAnalysisComplete: boolean;
   myAnalysisProgress: { done: number; total: number; percent: number };
 
@@ -331,6 +352,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         difficultyLevel: difficulty,
         businessModel: INIT_BM,
         fiveForces: INIT_5F,
+        valueCurve: INIT_VC,
         vrio: INIT_VRIO,
         swot: INIT_SWOT,
       },
@@ -348,7 +370,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     update((p) => ({ ...p, myAnalysis: null, shareCode: null }));
     // Also clear chat docs from Firestore
     if (user) {
-      const chatModules = ["business-model", "external-analysis", "internal-analysis", "swot-synthesis"];
+      const chatModules = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis"];
       chatModules.forEach(async (mod) => {
         try {
           const { deleteDoc, doc } = await import("firebase/firestore");
@@ -374,6 +396,19 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             ...p.myAnalysis[module],
             [pillar]: { points, populated: true },
           },
+        },
+      };
+    });
+  };
+
+  const updateValueCurve = (state: ValueCurveState) => {
+    update((p) => {
+      if (!p.myAnalysis) return p;
+      return {
+        ...p,
+        myAnalysis: {
+          ...p.myAnalysis,
+          valueCurve: state,
         },
       };
     });
@@ -415,6 +450,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       color: a.color,
       businessModel: a.businessModel,
       fiveForces: a.fiveForces,
+      valueCurve: a.valueCurve,
       vrio: a.vrio,
       swot: a.swot,
       industryAttractiveness: computeAttractiveness(a.fiveForces),
@@ -484,7 +520,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const myAnalysisComplete = portfolio.myAnalysis ? computeIsComplete(portfolio.myAnalysis) : false;
   const myAnalysisProgress = portfolio.myAnalysis
     ? getProgress(portfolio.myAnalysis)
-    : { done: 0, total: 16, percent: 0 };
+    : { done: 0, total: 17, percent: 0 };
 
   // Build constellation: own Health Card + imported team cards
   const constellationCards: HealthCard[] = [];
@@ -501,6 +537,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       color: a.color,
       businessModel: a.businessModel,
       fiveForces: a.fiveForces,
+      valueCurve: a.valueCurve,
       vrio: a.vrio,
       swot: a.swot,
       industryAttractiveness: computeAttractiveness(a.fiveForces),
@@ -520,6 +557,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         resetAnalysis,
         setDiagramLanguage,
         populatePillar,
+        updateValueCurve,
         myAnalysisComplete,
         myAnalysisProgress,
         generateShareCode,

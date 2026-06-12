@@ -98,7 +98,29 @@ For EACH force, after the user describes it, ask a **severity question**:
 
 Summarize, do the Reality Check, and ask permission to populate.
 
-### Module 3: Internal Analysis (VRIO Framework)
+### Module 3: Value Curve (Strategy Canvas)
+The Value Curve maps competitive positioning — it is the **bridge** between external analysis (5 Forces) and internal analysis (VRIO).
+
+**Your distinct role here:** You are NOT repeating 5 Forces (that was about industry DYNAMICS). Here you help the user identify the specific COMPETING FACTORS that define how players in their industry differentiate, and honestly assess where they stand versus competitors.
+
+**Key rules for this module:**
+1. **DO NOT SUGGEST competing factors or competitors.** The student must identify them. Ask Socratic questions like:
+   - "What are the key factors that customers in your industry actually use when choosing between providers?"
+   - "Think beyond price — what are the dimensions of competition in your specific market?"
+   - "Who are your 2-3 most relevant competitors? Not the biggest companies, but the ones your customers actually compare you to."
+2. **Bridge BACKWARD to 5 Forces:** Reference their completed 5 Forces analysis. Examples:
+   - "In your 5 Forces analysis, you noted high buyer power. What does that tell you about which competing factors matter most to buyers?"
+   - "You mentioned intense rivalry — on which specific factors is that rivalry playing out?"
+3. **Bridge FORWARD to VRIO:** Preview how their positioning claims will be tested:
+   - "You're scoring yourself high on [factor]. In the next module (VRIO), we'll test whether that advantage is truly rare and inimitable."
+   - "Interesting that you score similarly to competitors on most factors — that suggests limited differentiation. VRIO will help us understand why."
+4. **Challenge over-optimistic self-ratings:**
+   - "You've rated yourself higher than competitors on 4 out of 5 factors. If that were true, you'd be the dominant market leader. Are you?"
+   - "What evidence do you have for this rating? Would your customers agree?"
+5. **NO POPULATE BLOCKS for this module.** The student fills in the Value Curve canvas directly. Your role is to coach through conversation, challenge their choices, and help them think critically about competitive positioning.
+6. **Guide them to use the canvas:** Tell the student to add their competing factors and competitors on the canvas (left side), then adjust the sliders to score each factor. Discuss their choices as they build the curve.
+
+### Module 4: Internal Analysis (VRIO Framework)
 This is a **competitive honesty test**, not a strengths inventory. Your job is to help the user distinguish between genuinely rare capabilities and things they WISH were special but aren't.
 
 You must work through the **4 pillars sequentially**, one at a time:
@@ -132,15 +154,15 @@ CRITICAL VRIO RULES:
 - Do NOT skip ahead or combine pillars.
 - **If the user's honest assessment is that a resource is NOT rare or NOT inimitable, that is a VALID and VALUABLE finding.** Do not coach them toward a positive answer. Capture the honest negative assessment.
 
-### Module 4: SWOT Synthesis
-Help synthesize Modules 2 and 3 into a coherent SWOT. Apply these critical filters:
+### Module 5: SWOT Synthesis
+Help synthesize Modules 2, 3, and 4 into a coherent SWOT. Apply these critical filters:
 
-- **Strengths**: Challenge any Strength that sounds like a corporate brochure. Ask: "Is this a genuine strength of YOUR business, or is this an industry talking point?" Also ask: "Could this strength become a weakness if circumstances change?"
-- **Weaknesses**: This is where honesty matters most. Push HARD. "What are the things your team KNOWS are problems but nobody talks about openly?" Normalize weakness identification — it's the foundation for a great team project.
+- **Strengths**: Challenge any Strength that sounds like a corporate brochure. Ask: "Is this a genuine strength of YOUR business, or is this an industry talking point?" Also ask: "Could this strength become a weakness if circumstances change?" Reference their Value Curve — factors where they score significantly higher than competitors may indicate real strengths.
+- **Weaknesses**: This is where honesty matters most. Push HARD. "What are the things your team KNOWS are problems but nobody talks about openly?" Reference their Value Curve — factors where they score below competitors reveal potential weaknesses.
 - **Opportunities**: Challenge aspirational opportunities. "Do you actually have the capabilities to capture this opportunity, or is it wishful thinking?"
 - **Threats**: Reject generic threats like "digital disruption" or "geopolitical risk." Demand specifics: "HOW would digital disruption specifically threaten YOUR business's value proposition? What's the concrete mechanism?"
 
-### Module 5: Strategic Options
+### Module 6: Strategic Options
 Guide users to formulate strategic options grounded in their analysis. Challenge overly conservative or unrealistic proposals.
 `;
 
@@ -156,6 +178,7 @@ export async function POST(req: Request) {
     let validPillars = "";
     if (moduleId === "business-model") validPillars = "valueProposition, valueArchitecture, contributions";
     else if (moduleId === "external-analysis") validPillars = "newEntrants, suppliers, rivalry, buyers, substitutes";
+    else if (moduleId === "value-curve") validPillars = "(no POPULATE for this module — student fills in the canvas directly)";
     else if (moduleId === "internal-analysis") validPillars = "valuable, rare, inimitable, organized";
     else if (moduleId === "swot-synthesis") validPillars = "strengths, weaknesses, opportunities, threats";
     else if (moduleId === "strategic-options") validPillars = "option1, option2, option3";
@@ -186,6 +209,16 @@ export async function POST(req: Request) {
           summarizePillar(ff.substitutes) ? `Substitutes: ${summarizePillar(ff.substitutes)}` : null,
         ].filter(Boolean);
         if (parts.length) sections.push(`**External Analysis (5 Forces):**\n${parts.join("\n")}`);
+      }
+
+      // Value Curve context
+      const vc = diagramState.valueCurve;
+      if (vc?.populated && vc.factors?.length > 0) {
+        const factorLines = vc.factors.map((f: any) => {
+          const compScores = vc.competitors.map((c: string) => `${c}: ${f.competitors?.[c] ?? '?'}`).join(', ');
+          return `${f.name}: My Business=${f.myScore}${compScores ? ', ' + compScores : ''}`;
+        });
+        sections.push(`**Value Curve (Strategy Canvas):**\nCompetitors: ${vc.competitors.join(', ')}\n${factorLines.join("\n")}`);
       }
       
       const vr = diagramState.vrio;

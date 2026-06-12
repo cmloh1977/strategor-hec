@@ -14,15 +14,17 @@ import { useRouter } from "next/navigation";
 const MODULE_PILLAR_MAP: Record<string, { key: string; pillars: string[] }> = {
   "business-model": { key: "businessModel", pillars: ["valueProposition", "valueArchitecture", "contributions"] },
   "external-analysis": { key: "fiveForces", pillars: ["newEntrants", "suppliers", "rivalry", "buyers", "substitutes"] },
+  "value-curve": { key: "valueCurve", pillars: ["valueCurve"] },
   "internal-analysis": { key: "vrio", pillars: ["valuable", "rare", "inimitable", "organized"] },
   "swot-synthesis": { key: "swot", pillars: ["strengths", "weaknesses", "opportunities", "threats"] },
 };
 
 // The order of steps and what comes next
-const STEP_ORDER = ["business-model", "external-analysis", "internal-analysis", "swot-synthesis"];
+const STEP_ORDER = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis"];
 const STEP_NAMES: Record<string, string> = {
   "business-model": "Business Model",
   "external-analysis": "External Analysis (5 Forces)",
+  "value-curve": "Value Curve (Strategy Canvas)",
   "internal-analysis": "Internal Analysis (VRIO)",
   "swot-synthesis": "SWOT Synthesis",
 };
@@ -36,7 +38,7 @@ interface Message {
 const PILLAR_DEF: Record<string, {
   name: string;
   emoji: string;
-  module: "businessModel" | "fiveForces" | "vrio" | "swot";
+  module: "businessModel" | "fiveForces" | "valueCurve" | "vrio" | "swot";
 }> = {
   valueProposition: { name: "Value Proposition", emoji: "🎯", module: "businessModel" },
   valueArchitecture: { name: "Value Architecture", emoji: "⚙️", module: "businessModel" },
@@ -46,6 +48,7 @@ const PILLAR_DEF: Record<string, {
   rivalry: { name: "Industry Rivalry", emoji: "⚔️", module: "fiveForces" },
   buyers: { name: "Buyers", emoji: "🤝", module: "fiveForces" },
   substitutes: { name: "Substitutes", emoji: "🔄", module: "fiveForces" },
+  valueCurve: { name: "Value Curve", emoji: "📈", module: "valueCurve" as any },
   valuable: { name: "Valuable", emoji: "💎", module: "vrio" },
   rare: { name: "Rare", emoji: "🦄", module: "vrio" },
   inimitable: { name: "Inimitable", emoji: "🛡️", module: "vrio" },
@@ -85,6 +88,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `**HECストラテジージャーニー**へようこそ！私はあなたの**シンキングパートナー**です。\n\n**${name}**のビジネスモデルを一緒に明確にしましょう。\n\n左側にOdyssey 3.14フレームワークの**3つの柱**が表示されています：\n\n- 🎯 **価値提案** — *誰が*顧客か？*何の*製品・サービスか？*どんな価格*か？\n- ⚙️ **価値アーキテクチャ** — *どのように*価値を提供するか？バリューチェーン、パートナー、資源は？\n- 📊 **貢献** — 財務・環境・社会的パフォーマンス\n\nでは始めましょう：**${name}は基本的に何をしており、主な顧客は誰ですか？**`;
       case "external-analysis":
         return `お帰りなさい。次は**${name}**の**外部環境**に目を向けましょう。\n\n**ポーターの5つの力**を使って競争環境を分析します。\n\n*${name}はどの産業で事業を展開していますか？*`;
+      case "value-curve":
+        return `${name}のバリューカーブを作成しましょう。まず、あなたの業界で顧客がプロバイダーを選ぶ際に重視する要素は何ですか？`;
       case "internal-analysis":
         return `再びお会いできて嬉しいです。**${name}**の**内部**を見てみましょう。\n\n**VRIOフレームワーク**を使って主要な資源を評価します。\n\n*${name}の最も重要な資源や能力は何だと思いますか？*`;
       case "swot-synthesis":
@@ -98,6 +103,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `Bienvenue dans le **Parcours Stratégique HEC** ! Je suis votre **Partenaire de Réflexion**.\n\nConstruisons ensemble une image claire du modèle d'affaires de **${name}**.\n\nSur la gauche, vous voyez les **3 piliers** du framework Odyssey 3.14 :\n\n- 🎯 **Proposition de Valeur** — *Qui* sont vos clients ? *Quels* produits/services ? *Quel prix* ?\n- ⚙️ **Architecture de Valeur** — *Comment* livrez-vous de la valeur ? Chaîne de valeur, partenaires, ressources ?\n- 📊 **Contributions** — Performance financière, environnementale et sociétale.\n\nCommençons : **Que fait fondamentalement ${name}, et qui sont ses principaux clients ?**`;
       case "external-analysis":
         return `Bienvenue. Tournons notre regard vers **l'extérieur** pour **${name}**.\n\nNous utiliserons les **5 Forces de Porter** pour cartographier la dynamique concurrentielle.\n\n*Dans quel secteur opère ${name} ?*`;
+      case "value-curve":
+        return `Créons la courbe de valeur de ${name}. Quels sont les facteurs clés que les clients de votre secteur utilisent pour choisir entre les fournisseurs ?`;
       case "internal-analysis":
         return `Ravi de vous revoir. Regardons **l'intérieur** de **${name}**.\n\nNous utiliserons le **framework VRIO** pour évaluer les ressources clés.\n\n*Quelle est la ressource ou capacité la plus importante de ${name} selon vous ?*`;
       case "swot-synthesis":
@@ -111,6 +118,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `欢迎来到**HEC战略之旅**！我是你的**思维伙伴**。\n\n让我们一起清晰地描绘**${name}**的商业模式。\n\n在左边，您可以看到Odyssey 3.14框架的**3个支柱**：\n\n- 🎯 **价值主张** — *谁*是客户？*什么*产品/服务？*什么价格*？\n- ⚙️ **价值架构** — *如何*交付价值？价值链、合作伙伴、资源？\n- 📊 **贡献** — 财务、环境和社会绩效\n\n让我们开始吧：**${name}从根本上做什么，主要客户是谁？**`;
       case "external-analysis":
         return `欢迎回来。现在让我们将目光转向**${name}**的**外部环境**。\n\n我们将使用**波特五力模型**来分析竞争格局。\n\n*${name}在哪个行业运营？*`;
+      case "value-curve":
+        return `让我们为${name}绘制价值曲线。在您的行业中，客户在选择供应商时主要考虑哪些因素？`;
       case "internal-analysis":
         return `很高兴再次见到你。让我们审视**${name}**的**内部**。\n\n我们将使用**VRIO框架**来评估关键资源。\n\n*您认为${name}最重要的资源或能力是什么？*`;
       case "swot-synthesis":
@@ -124,6 +133,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
       return `Welcome to the **HEC Strategy Journey**! I'm your **Thinking Partner**.\n\nLet's build a crystal-clear picture of **${name}**'s business model.\n\nOn the left, you can see the **3 pillars** from the Odyssey 3.14 framework:\n\n- 🎯 **Value Proposition** — *Who* are your customers? *What* products/services? At *what price*?\n- ⚙️ **Value Architecture** — *How* do you deliver value? Value chain, partners, resources?\n- 📊 **Contributions** — Financial, environmental, and societal performance.\n\nLet's start: **What does ${name} fundamentally do, and who are its primary customers?**`;
     case "external-analysis":
       return `Welcome back. Now let's shift our lens **outward** for **${name}**.\n\nWe'll use **Porter's 5 Forces** to map the competitive dynamics.\n\n*In broad terms, which industry does ${name} operate in?*`;
+    case "value-curve":
+      return `Let's map your competitive positioning with a Value Curve for ${name}. What are the key factors that customers in your industry use when choosing between providers?`;
     case "internal-analysis":
       return `Good to see you again. Let's look **inward** at **${name}**.\n\nWe'll use the **VRIO framework** to evaluate key resources.\n\n*What do you believe is ${name}'s single most important resource or capability?*`;
     case "swot-synthesis":
@@ -237,7 +248,7 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     const current = pendingPopulates[0];
     const def = PILLAR_DEF[current.pillar];
     if (def) {
-      populatePillar(def.module, current.pillar, current.points);
+      populatePillar(def.module as "businessModel" | "fiveForces" | "vrio" | "swot", current.pillar, current.points);
     }
     const pillarName = def ? def.name : current.pillar;
     const remaining = pendingPopulates.slice(1);

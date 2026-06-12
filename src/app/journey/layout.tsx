@@ -6,7 +6,7 @@ import { TeamProvider, useTeam } from "@/lib/TeamContext";
 import { MASTER_EMAIL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LogOut, LayoutDashboard, BookOpen, Compass, Layers, ShieldAlert, Lock, Zap, BarChart3, MessageSquare, Target, Settings, KeyRound, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { LogOut, LayoutDashboard, BookOpen, Compass, TrendingUp, Layers, ShieldAlert, Lock, Zap, BarChart3, MessageSquare, Target, Settings, KeyRound, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
@@ -14,6 +14,7 @@ import clsx from "clsx";
 const ANALYSIS_STEPS = [
   { id: "business-model", name: "Business Model", icon: BookOpen },
   { id: "external-analysis", name: "External Analysis", icon: Compass },
+  { id: "value-curve", name: "Value Curve", icon: TrendingUp },
   { id: "internal-analysis", name: "Internal Analysis", icon: Layers },
   { id: "swot-synthesis", name: "SWOT Synthesis", icon: ShieldAlert },
 ];
