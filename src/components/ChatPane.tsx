@@ -93,7 +93,7 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
       case "internal-analysis":
         return `再びお会いできて嬉しいです。**${name}**の**内部**を見てみましょう。\n\n**VRIOフレームワーク**を使って主要な資源を評価します。\n\n*${name}の最も重要な資源や能力は何だと思いますか？*`;
       case "swot-synthesis":
-        return `**${name}**のすべてを**統合**する時です。\n\n5つの力とVRIOの分析に基づいて、包括的な**SWOT**を構築しましょう。\n\n*これまでの分析で最も印象に残ったことは何ですか？*`;
+        return `**${name}**のすべてを**統合**する時です。\n\nこれはゼロからのスタートではありません。ビジネスモデル、5つの力、バリューカーブ、VRIOの分析から得られた知見を基に、**SWOT候補**を一緒にレビューしましょう。\n\n各象限の候補を提示しますので、挑戦・修正・却下してください。準備はできましたか？`;
       default: return `**${name}**の分析を続けましょう。`;
     }
   }
@@ -108,7 +108,7 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
       case "internal-analysis":
         return `Ravi de vous revoir. Regardons **l'intérieur** de **${name}**.\n\nNous utiliserons le **framework VRIO** pour évaluer les ressources clés.\n\n*Quelle est la ressource ou capacité la plus importante de ${name} selon vous ?*`;
       case "swot-synthesis":
-        return `Il est temps de **synthétiser** tout pour **${name}**.\n\nÀ partir de vos analyses 5 Forces et VRIO, construisons un **SWOT** complet.\n\n*Qu'est-ce qui vous a le plus marqué dans vos analyses précédentes ?*`;
+        return `Il est temps de **synthétiser** tout pour **${name}**.\n\nCe n'est pas un départ de zéro. À partir de vos analyses du Modèle d'Affaires, des 5 Forces, de la Courbe de Valeur et du VRIO, je vais proposer des **candidats SWOT** que nous examinerons ensemble.\n\nJe présenterai des éléments pour chaque quadrant — défiez, modifiez ou rejetez ce qui ne vous semble pas juste. Prêt ?`;
       default: return `Continuons l'analyse de **${name}**.`;
     }
   }
@@ -123,7 +123,7 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
       case "internal-analysis":
         return `很高兴再次见到你。让我们审视**${name}**的**内部**。\n\n我们将使用**VRIO框架**来评估关键资源。\n\n*您认为${name}最重要的资源或能力是什么？*`;
       case "swot-synthesis":
-        return `是时候为**${name}****综合**所有内容了。\n\n根据您的五力和VRIO分析，让我们构建全面的**SWOT**。\n\n*在之前的分析中，什么给您留下了最深刻的印象？*`;
+        return `是时候为**${name}****综合**所有内容了。\n\n这不是从零开始。基于您的商业模式、五力、价值曲线和VRIO分析，我将提出**SWOT候选项**供我们一起审查。\n\n我会为每个象限提出建议——请挑战、修改或否决任何不合适的内容。准备好了吗？`;
       default: return `让我们继续分析**${name}**。`;
     }
   }
@@ -138,7 +138,7 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
     case "internal-analysis":
       return `Good to see you again. Let's look **inward** at **${name}**.\n\nWe'll use the **VRIO framework** to evaluate key resources.\n\n*What do you believe is ${name}'s single most important resource or capability?*`;
     case "swot-synthesis":
-      return `Time to **synthesize** everything for **${name}**.\n\nBased on your 5 Forces and VRIO work, let's build a comprehensive **SWOT**.\n\n*What stood out most from your previous analyses?*`;
+      return `Time to **synthesize** everything for **${name}**.\n\nThis is not a blank slate. Based on your Business Model, 5 Forces, Value Curve, and VRIO analysis, I'll propose **SWOT candidates** for us to review together.\n\nI'll present draft items for each quadrant — challenge, modify, or reject anything that doesn't feel right. Ready?`;
     default:
       return `Let's continue analyzing **${name}**.`;
   }
