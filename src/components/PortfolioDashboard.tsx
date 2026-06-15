@@ -12,6 +12,7 @@ import StrategicHealthCard from "./StrategicHealthCard";
 const STEP_LABELS: Record<string, string> = {
   "business-model": "Business Model",
   "external-analysis": "External Analysis",
+  "value-curve": "Value Curve",
   "internal-analysis": "Internal Analysis",
   "swot-synthesis": "SWOT Synthesis",
 };
@@ -19,6 +20,7 @@ const STEP_LABELS: Record<string, string> = {
 function getNextStep(a: any): string {
   if (!a.businessModel.valueProposition.populated || !a.businessModel.valueArchitecture.populated || !a.businessModel.contributions.populated) return "business-model";
   if (!a.fiveForces.newEntrants.populated || !a.fiveForces.suppliers.populated || !a.fiveForces.rivalry.populated || !a.fiveForces.buyers.populated || !a.fiveForces.substitutes.populated) return "external-analysis";
+  if (!a.valueCurve?.populated) return "value-curve";
   if (!a.vrio.valuable.populated || !a.vrio.rare.populated || !a.vrio.inimitable.populated || !a.vrio.organized.populated) return "internal-analysis";
   return "swot-synthesis";
 }
@@ -26,6 +28,7 @@ function getNextStep(a: any): string {
 function isStepComplete(a: any, step: string): boolean {
   if (step === "business-model") return a.businessModel.valueProposition.populated && a.businessModel.valueArchitecture.populated && a.businessModel.contributions.populated;
   if (step === "external-analysis") return a.fiveForces.newEntrants.populated && a.fiveForces.suppliers.populated && a.fiveForces.rivalry.populated && a.fiveForces.buyers.populated && a.fiveForces.substitutes.populated;
+  if (step === "value-curve") return a.valueCurve?.populated ?? false;
   if (step === "internal-analysis") return a.vrio.valuable.populated && a.vrio.rare.populated && a.vrio.inimitable.populated && a.vrio.organized.populated;
   if (step === "swot-synthesis") return a.swot.strengths.populated && a.swot.weaknesses.populated && a.swot.opportunities.populated && a.swot.threats.populated;
   return false;
@@ -266,7 +269,7 @@ disabled={!name.trim() || !bizName.trim()}
 
                 {/* Step Checklist */}
                 <div className="space-y-1.5 mb-5">
-                  {(["business-model", "external-analysis", "internal-analysis", "swot-synthesis"] as const).map((step) => {
+                  {(["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis"] as const).map((step) => {
                     const done = isStepComplete(portfolio.myAnalysis!, step);
                     return (
                       <div key={step} className="flex items-center gap-2 text-xs">

@@ -73,6 +73,7 @@ interface ParticipantProgress {
   modules: {
     businessModel: { done: number; total: number };
     fiveForces: { done: number; total: number };
+    valueCurve: { done: number; total: number };
     vrio: { done: number; total: number };
     swot: { done: number; total: number };
   };
@@ -128,10 +129,11 @@ function calcEngagement(chats: { moduleId: string; messages: { role: string; tex
 function calcProgress(p: PortfolioSnapshot | null): ParticipantProgress["progress"] & { modules: ParticipantProgress["modules"]; status: ParticipantProgress["status"]; currentModule: string } {
   if (!p?.myAnalysis) {
     return {
-      done: 0, total: 16, percent: 0,
+      done: 0, total: 17, percent: 0,
       modules: {
         businessModel: { done: 0, total: 3 },
         fiveForces: { done: 0, total: 5 },
+        valueCurve: { done: 0, total: 1 },
         vrio: { done: 0, total: 4 },
         swot: { done: 0, total: 4 },
       },
@@ -143,35 +145,38 @@ function calcProgress(p: PortfolioSnapshot | null): ParticipantProgress["progres
   const a = p.myAnalysis;
   const bm = [a.businessModel.valueProposition, a.businessModel.valueArchitecture, a.businessModel.contributions].filter(p => p?.populated).length;
   const ff = [a.fiveForces.newEntrants, a.fiveForces.suppliers, a.fiveForces.rivalry, a.fiveForces.buyers, a.fiveForces.substitutes].filter(p => p?.populated).length;
+  const vc = (a as any).valueCurve?.populated ? 1 : 0;
   const vr = [a.vrio.valuable, a.vrio.rare, a.vrio.inimitable, a.vrio.organized].filter(p => p?.populated).length;
   const sw = [a.swot.strengths, a.swot.weaknesses, a.swot.opportunities, a.swot.threats].filter(p => p?.populated).length;
 
-  const done = bm + ff + vr + sw;
-  const percent = Math.round((done / 16) * 100);
+  const done = bm + ff + vc + vr + sw;
+  const percent = Math.round((done / 17) * 100);
 
   let currentModule = "—";
   let status: ParticipantProgress["status"] = "Not Started";
 
-  if (done === 16) {
+  if (done === 17) {
     status = "Completed";
     currentModule = "All Complete";
   } else if (done > 0) {
     status = "In Progress";
     if (sw > 0 && sw < 4) currentModule = "SWOT Synthesis";
     else if (vr > 0 && vr < 4) currentModule = "Internal Analysis (VRIO)";
+    else if (ff === 5 && vc === 0) currentModule = "Value Curve";
     else if (ff > 0 && ff < 5) currentModule = "External Analysis (5 Forces)";
     else if (bm > 0 && bm < 3) currentModule = "Business Model";
     else if (bm === 3 && ff === 0) currentModule = "External Analysis (5 Forces)";
-    else if (ff === 5 && vr === 0) currentModule = "Internal Analysis (VRIO)";
+    else if (vc === 1 && vr === 0) currentModule = "Internal Analysis (VRIO)";
     else if (vr === 4 && sw === 0) currentModule = "SWOT Synthesis";
     else currentModule = "In Progress";
   }
 
   return {
-    done, total: 16, percent,
+    done, total: 17, percent,
     modules: {
       businessModel: { done: bm, total: 3 },
       fiveForces: { done: ff, total: 5 },
+      valueCurve: { done: vc, total: 1 },
       vrio: { done: vr, total: 4 },
       swot: { done: sw, total: 4 },
     },
@@ -319,8 +324,8 @@ export default function AdminDashboard() {
         results.push({
           user: u,
           portfolio: null,
-          progress: { done: 0, total: 16, percent: 0 },
-          modules: { businessModel: { done: 0, total: 3 }, fiveForces: { done: 0, total: 5 }, vrio: { done: 0, total: 4 }, swot: { done: 0, total: 4 } },
+          progress: { done: 0, total: 17, percent: 0 },
+          modules: { businessModel: { done: 0, total: 3 }, fiveForces: { done: 0, total: 5 }, valueCurve: { done: 0, total: 1 }, vrio: { done: 0, total: 4 }, swot: { done: 0, total: 4 } },
           status: "Not Started",
           currentModule: "—",
           engagement: emptyEngagement,
@@ -740,6 +745,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-4 mt-1.5">
                           <ModuleDots label="BM" done={p.modules.businessModel.done} total={p.modules.businessModel.total} />
                           <ModuleDots label="5F" done={p.modules.fiveForces.done} total={p.modules.fiveForces.total} />
+                          <ModuleDots label="VC" done={p.modules.valueCurve.done} total={p.modules.valueCurve.total} />
                           <ModuleDots label="VRIO" done={p.modules.vrio.done} total={p.modules.vrio.total} />
                           <ModuleDots label="SWOT" done={p.modules.swot.done} total={p.modules.swot.total} />
                         </div>
