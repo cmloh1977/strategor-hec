@@ -42,6 +42,18 @@ interface StoryCard {
   summary: string; // one-liner
 }
 
+// ── Value Curve types ──
+interface ValueCurveFactor {
+  name: string;
+  myScore: number;
+  competitors: Record<string, number>;
+}
+interface ValueCurveState {
+  factors: ValueCurveFactor[];
+  competitors: string[];
+  populated: boolean;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -81,7 +93,7 @@ export async function POST(req: Request) {
 async function generateSlideContent(frameworkSummary: string) {
   const prompt = `You are a senior strategy consultant helping a leadership program participant present their business analysis to their team for the first time.
 
-The goal is to help the AUDIENCE quickly understand this person's business through 4 strategic frameworks. Each framework should be distilled into easy-to-understand story cards.
+The goal is to help the AUDIENCE quickly understand this person's business through 5 strategic frameworks. Each framework should be distilled into easy-to-understand story cards.
 
 IMPORTANT: All content MUST be in English regardless of the original analysis language. This is for SHARING FINDINGS to help others understand the business — NOT for Q&A or challenging.
 
@@ -116,6 +128,11 @@ Synthesize the strategic position:
 - Card 3: label="WHAT'S AHEAD", summary=the most promising external opportunities (max 20 words)
 - Card 4: label="WHAT'S AT RISK", summary=the most serious external threats (max 20 words)
 
+### For "valueCurve" (3 cards):
+- Card 1: Key differentiator — the factor(s) where you score significantly above competitors
+- Card 2: Competitive vulnerability — the factor(s) where competitors outperform you
+- Card 3: Blue ocean opportunity — whitespace where no player scores high
+
 ### For each framework also generate:
 - **headline**: A clear informative one-liner summarizing the key finding (max 15 words)
 - **implications**: An array of EXACTLY 3 strategic implications. These are NOT summaries — they are forward-looking, specific, actionable insights about what the findings mean for the business. Each should be 15-25 words. Start each with a concrete observation (not "This means..."). Examples:
@@ -125,7 +142,7 @@ Synthesize the strategic position:
 - **bottomLine**: A punchy one-liner (max 10 words) that captures the overall verdict. Examples: "Solid model with untapped ESG narrative potential", "Well-protected but operationally stretched", "Strong resources, weak organizational leverage"
 
 ### Also generate overall:
-- **overallSynthesis**: 2-sentence strategic narrative connecting all 4 frameworks
+- **overallSynthesis**: 2-sentence strategic narrative connecting all 5 frameworks
 - **keyStrength**: The single most important strength (one sentence)
 - **keyChallenge**: The single most important challenge (one sentence)
 
@@ -169,6 +186,16 @@ Synthesize the strategic position:
       { "label": "WHERE WE'RE EXPOSED", "summary": "..." },
       { "label": "WHAT'S AHEAD", "summary": "..." },
       { "label": "WHAT'S AT RISK", "summary": "..." }
+    ],
+    "implications": ["...", "...", "..."],
+    "bottomLine": "..."
+  },
+  "valueCurve": {
+    "headline": "...",
+    "storyCards": [
+      { "icon": "<emoji>", "label": "<4 words max>", "summary": "<25 words max describing a key competitive positioning insight from the value curve>" },
+      { "icon": "<emoji>", "label": "<4 words max>", "summary": "<25 words>" },
+      { "icon": "<emoji>", "label": "<4 words max>", "summary": "<25 words>" }
     ],
     "implications": ["...", "...", "..."],
     "bottomLine": "..."
@@ -290,6 +317,9 @@ async function buildPPTX(
     "WHERE WE'RE EXPOSED": "\uD83D\uDD34",  // 🔴
     "WHAT'S AHEAD": "\uD83D\uDE80",         // 🚀
     "WHAT'S AT RISK": "\u26A1",              // ⚡
+    "KEY DIFFERENTIATOR": "\uD83C\uDFC6",    // 🏆
+    "COMPETITIVE GAP": "\uD83D\uDCC9",       // 📉
+    "BLUE OCEAN": "\uD83C\uDF0A",            // 🌊
   };
 
   // ══════════════════════════════
@@ -361,71 +391,88 @@ async function buildPPTX(
   });
 
   // ══════════════════════════════
-  // SLIDE 6: STRATEGIC SUMMARY
+  // SLIDE 6: VALUE CURVE
   // ══════════════════════════════
-  const slide6 = pptx.addSlide();
-  slide6.background = { color: CLR.darkSlate };
-  slide6.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 0.08, fill: { color: CLR.indigo } });
+  buildFrameworkSlide(pptx, {
+    frameworkLabel: "COMPETITIVE POSITIONING",
+    frameworkSub: "Value Curve",
+    accentColor: CLR.purple,
+    accentLight: "F5F3FF",
+    headline: slideContent.valueCurve?.headline || "Competitive Positioning Overview",
+    storyCards: (slideContent.valueCurve?.storyCards || []).map((c: any) => ({
+      ...c, icon: iconMap[c.label] || c.icon || "\u2726",
+    })),
+    implications: slideContent.valueCurve?.implications || [],
+    bottomLine: slideContent.valueCurve?.bottomLine || "",
+    businessName, ownerName,
+  });
 
-  slide6.addText("STRATEGIC SUMMARY", {
+  // ══════════════════════════════
+  // SLIDE 7: STRATEGIC SUMMARY
+  // ══════════════════════════════
+  const slideSummary = pptx.addSlide();
+  slideSummary.background = { color: CLR.darkSlate };
+  slideSummary.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 0.08, fill: { color: CLR.indigo } });
+
+  slideSummary.addText("STRATEGIC SUMMARY", {
     x: 0.8, y: 0.4, w: 8.4, h: 0.35,
     fontSize: 11, fontFace: "Arial", color: CLR.indigo, bold: true,
   });
-  slide6.addText(businessName, {
+  slideSummary.addText(businessName, {
     x: 0.8, y: 0.7, w: 8.4, h: 0.35,
     fontSize: 16, fontFace: "Arial", color: CLR.white, bold: true,
   });
 
   // Overall synthesis
-  slide6.addText(slideContent.overallSynthesis || "", {
+  slideSummary.addText(slideContent.overallSynthesis || "", {
     x: 0.8, y: 1.4, w: 8.4, h: 0.8,
     fontSize: 14, fontFace: "Arial", color: CLR.slate400, italic: true,
   });
 
   // Key Strength box
-  slide6.addShape(pptx.ShapeType.roundRect, {
+  slideSummary.addShape(pptx.ShapeType.roundRect, {
     x: 0.8, y: 2.5, w: 4.0, h: 1.3,
     fill: { color: "0F3A2A" }, rectRadius: 0.1,
     line: { color: CLR.emerald, width: 1 },
   });
-  slide6.addText("\u2191 KEY STRENGTH", {
+  slideSummary.addText("\u2191 KEY STRENGTH", {
     x: 1.0, y: 2.6, w: 3.6, h: 0.3,
     fontSize: 9, fontFace: "Arial", color: CLR.emerald, bold: true,
   });
-  slide6.addText(slideContent.keyStrength || "", {
+  slideSummary.addText(slideContent.keyStrength || "", {
     x: 1.0, y: 2.95, w: 3.6, h: 0.75,
     fontSize: 12, fontFace: "Arial", color: CLR.white,
     valign: "top",
   });
 
   // Key Challenge box
-  slide6.addShape(pptx.ShapeType.roundRect, {
+  slideSummary.addShape(pptx.ShapeType.roundRect, {
     x: 5.2, y: 2.5, w: 4.0, h: 1.3,
     fill: { color: "3B1318" }, rectRadius: 0.1,
     line: { color: CLR.red, width: 1 },
   });
-  slide6.addText("\u2193 KEY CHALLENGE", {
+  slideSummary.addText("\u2193 KEY CHALLENGE", {
     x: 5.4, y: 2.6, w: 3.6, h: 0.3,
     fontSize: 9, fontFace: "Arial", color: CLR.red, bold: true,
   });
-  slide6.addText(slideContent.keyChallenge || "", {
+  slideSummary.addText(slideContent.keyChallenge || "", {
     x: 5.4, y: 2.95, w: 3.6, h: 0.75,
     fontSize: 12, fontFace: "Arial", color: CLR.white,
     valign: "top",
   });
 
   // Health score recap
-  slide6.addShape(pptx.ShapeType.roundRect, {
+  slideSummary.addShape(pptx.ShapeType.roundRect, {
     x: 3.8, y: 4.1, w: 2.4, h: 0.7,
     fill: { color: gradeColor }, rectRadius: 0.1,
   });
-  slide6.addText(`Health Score: ${grade}  (${aiScores.healthScore}/100)`, {
+  slideSummary.addText(`Health Score: ${grade}  (${aiScores.healthScore}/100)`, {
     x: 3.8, y: 4.1, w: 2.4, h: 0.7,
     fontSize: 13, fontFace: "Arial", color: CLR.white, bold: true,
     align: "center", valign: "middle",
   });
 
-  addFooter(slide6, pptx, businessName, ownerName);
+  addFooter(slideSummary, pptx, businessName, ownerName);
 
   // ── Write to buffer ──
   const data = await pptx.write({ outputType: "nodebuffer" }) as Buffer;
@@ -628,6 +675,19 @@ function buildFrameworkSummary(analysis: any, aiScores: any): string {
 - Weaknesses (${sw.weaknessesWeight}/10): ${swData.weaknesses?.points?.join("; ") || "N/A"}
 - Opportunities (${sw.opportunitiesWeight}/10): ${swData.opportunities?.points?.join("; ") || "N/A"}
 - Threats (${sw.threatsWeight}/10): ${swData.threats?.points?.join("; ") || "N/A"}`);
+
+  const vc = analysis.valueCurve as ValueCurveState | undefined;
+  if (vc?.populated && vc.factors?.length > 0) {
+    const factorLines = vc.factors.map((f) => {
+      const compScores = vc.competitors
+        .map((comp) => `${comp}: ${f.competitors[comp] ?? "N/A"}`)
+        .join(", ");
+      return `  - ${f.name}: You=${f.myScore}${compScores ? ` | ${compScores}` : ""}`;
+    }).join("\n");
+    sections.push(`### Competitive Positioning (Value Curve)
+- Competitors: ${vc.competitors.join(", ") || "None"}
+- Factors:\n${factorLines}`);
+  }
 
   sections.push(`### Overall
 - Health Score: ${aiScores.healthScore}/100

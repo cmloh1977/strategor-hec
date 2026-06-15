@@ -27,6 +27,13 @@ interface ReportData {
       overviewInsight: string;
       quadrants: { name: string; weight: string; evidence: string; rationale: string }[];
     };
+    valueCurve: {
+      sectionTitle: string;
+      overviewInsight: string;
+      factors: { name: string; yourScore: number; competitorAvg: number; gap: string; insight: string }[];
+      blueOceanOpportunities: string;
+      vulnerabilities: string;
+    };
   };
   strategicPriorities: {
     insight: string;
@@ -65,6 +72,10 @@ interface AIScores {
     opportunitiesWeight: number;
     threatsWeight: number;
   };
+  valueCurve?: {
+    differentiationScore: number;
+    insight: string;
+  };
 }
 
 interface PillarDataPDF {
@@ -96,6 +107,11 @@ export interface FrameworkData {
     weaknesses: PillarDataPDF;
     opportunities: PillarDataPDF;
     threats: PillarDataPDF;
+  };
+  valueCurve?: {
+    factors: { name: string; myScore: number; competitors: Record<string, number> }[];
+    competitors: string[];
+    populated: boolean;
   };
 }
 
@@ -776,6 +792,98 @@ export async function generateReportPDF(
   }
 
   // ════════════════════════════════════════
+  // VALUE CURVE SECTION
+  // ════════════════════════════════════════
+  if (report.modules.valueCurve) {
+    needsPage(40);
+    y += 4;
+    sectionHead(report.modules.valueCurve.sectionTitle, C.purple);
+    doc.setFont("helvetica", "italic");
+    y += wrap(report.modules.valueCurve.overviewInsight, M + 2, CW - 4, 8, C.slate500, 1.5);
+    y += 4;
+
+    // Factor comparison table
+    if (report.modules.valueCurve.factors.length > 0) {
+      needsPage(12);
+      // Table header
+      doc.setFillColor(...C.slate200);
+      doc.rect(M, y, CW, 6, "F");
+      doc.setFontSize(6.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...C.slate700);
+      doc.text("Factor", M + 4, y + 4);
+      doc.text("Your Score", M + 70, y + 4);
+      doc.text("Competitor Avg", M + 100, y + 4);
+      doc.text("Gap", M + 135, y + 4);
+      y += 8;
+
+      for (const factor of report.modules.valueCurve.factors) {
+        needsPage(14);
+        // Alternating row background
+        doc.setFillColor(...C.slate100);
+        doc.rect(M, y - 2, CW, 10, "F");
+
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...C.slate700);
+        doc.text(factor.name, M + 4, y + 2);
+
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...C.slate600);
+        doc.text(`${factor.yourScore}/10`, M + 70, y + 2);
+        doc.text(`${factor.competitorAvg.toFixed(1)}/10`, M + 100, y + 2);
+
+        // Gap with color coding
+        const gapColor: [number, number, number] = factor.gap.startsWith("+") ? C.emerald : factor.gap.startsWith("-") ? C.red : C.slate500;
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...gapColor);
+        doc.text(factor.gap, M + 135, y + 2);
+
+        // Insight below
+        doc.setFontSize(6);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(...C.slate400);
+        const insightLines = doc.splitTextToSize(factor.insight, CW - 12);
+        doc.text(insightLines[0] || "", M + 4, y + 6);
+        y += 11;
+      }
+      y += 2;
+    }
+
+    // Blue Ocean Opportunities box
+    needsPage(15);
+    doc.setFillColor(...C.indigo50);
+    const boLines = doc.splitTextToSize(report.modules.valueCurve.blueOceanOpportunities, CW - 16);
+    const boH = boLines.length * 3.5 + 10;
+    doc.roundedRect(M, y, CW, boH, 2, 2, "F");
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.indigo);
+    doc.text("BLUE OCEAN OPPORTUNITIES", M + 5, y + 5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.slate700);
+    doc.text(boLines, M + 5, y + 10);
+    y += boH + 4;
+
+    // Vulnerabilities box
+    needsPage(15);
+    doc.setFillColor(...C.red50);
+    const vulnLines = doc.splitTextToSize(report.modules.valueCurve.vulnerabilities, CW - 16);
+    const vulnH = vulnLines.length * 3.5 + 10;
+    doc.roundedRect(M, y, CW, vulnH, 2, 2, "F");
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.red);
+    doc.text("VULNERABILITIES", M + 5, y + 5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.slate700);
+    doc.text(vulnLines, M + 5, y + 10);
+    y += vulnH + 6;
+  }
+
+  // ════════════════════════════════════════
   // STRATEGIC PRIORITIES (Detailed)
   // ════════════════════════════════════════
   needsPage(30);
@@ -987,6 +1095,58 @@ export async function generateReportPDF(
       frameworkData.swot.opportunities.points, frameworkData.swot.opportunities.populated);
     drawPanel(M + swotW + bmGap, y, swotW, swotH, [180, 83, 9], "Threats", "External Negative",
       frameworkData.swot.threats.points, frameworkData.swot.threats.populated);
+
+    // ── Appendix E: Value Curve ──
+    if (frameworkData.valueCurve?.populated) {
+      doc.addPage();
+      y = M;
+      footer();
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...C.darkSlate);
+      doc.text("Appendix E: Value Curve", M, y + 5);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(...C.slate400);
+      doc.text("Blue Ocean Strategy — W. Chan Kim, Renée Mauborgne", M, y + 11);
+      y += 18;
+
+      const vcCompetitors = frameworkData.valueCurve.competitors;
+      const vcFactors = frameworkData.valueCurve.factors;
+
+      // Factor panels
+      const vcPanelW = CW;
+      for (const factor of vcFactors) {
+        needsPage(22);
+        doc.setFillColor(...C.indigo50);
+        doc.roundedRect(M, y, vcPanelW, 18, 2, 2, "F");
+
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...C.indigo);
+        doc.text(factor.name, M + 5, y + 6);
+
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...C.slate700);
+        doc.text(`Your Score: ${factor.myScore}/10`, M + 5, y + 11);
+
+        // Competitor scores
+        let compX = M + 50;
+        for (const comp of vcCompetitors) {
+          const compScore = factor.competitors[comp] ?? 0;
+          doc.setFontSize(6.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(...C.slate500);
+          const compLabel = `${comp}: ${compScore}/10`;
+          doc.text(compLabel, compX, y + 11);
+          compX += doc.getTextWidth(compLabel) + 8;
+          if (compX > M + vcPanelW - 10) break;
+        }
+
+        y += 20;
+      }
+    }
   }
 
   // ── Save ──
