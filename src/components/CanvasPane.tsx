@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { usePortfolio, LANGUAGE_FLAGS } from "@/lib/PortfolioContext";
 import type { AppLanguage } from "@/lib/PortfolioContext";
 import type { PillarData, ValueCurveState, ValueCurveFactor } from "@/lib/PortfolioContext";
+import InnovationDirectionsPane from "./InnovationDirectionsPane";
 
 // ── Translation Maps ──
 const TRANSLATIONS: Record<string, Record<AppLanguage, string>> = {
@@ -16,6 +17,7 @@ const TRANSLATIONS: Record<string, Record<AppLanguage, string>> = {
   "ea-desc": { en: "Analyze the competitive forces shaping your industry using Porter's 5 Forces.", ja: "ポーターの5つの力を使って、業界を形成する競争要因を分析しましょう。", fr: "Analysez les forces concurrentielles de votre industrie avec les 5 Forces de Porter.", zh: "使用波特五力模型分析塑造您行业的竞争力量。" },
   "ia-desc": { en: "Evaluate key resources and capabilities using the VRIO framework.", ja: "VRIOフレームワークを使って、主要な資源と能力を評価しましょう。", fr: "Évaluez vos ressources et capacités clés avec le framework VRIO.", zh: "使用VRIO框架评估关键资源和能力。" },
   "sw-desc": { en: "Combine your external and internal analyses into a comprehensive SWOT.", ja: "外部分析と内部分析を包括的なSWOTに統合しましょう。", fr: "Combinez vos analyses externe et interne en une synthèse SWOT complète.", zh: "将外部和内部分析合并为综合SWOT。" },
+  "inn-desc": { en: "Select 3 innovation directions to reinvent your business model.", ja: "ビジネスモデルを革新する3つの方向性を選択してください。", fr: "Sélectionnez 3 directions d'innovation pour réinventer votre modèle d'affaires.", zh: "选择3个创新方向来重塑您的商业模式。" },
   // Business Model segments
   "Value Proposition": { en: "Value Proposition", ja: "価値提案", fr: "Proposition de Valeur", zh: "价值主张" },
   "Who? What?": { en: "Who? What?", ja: "誰に？何を？", fr: "Qui ? Quoi ?", zh: "谁？什么？" },
@@ -91,6 +93,7 @@ const MODULE_DESCS: Record<string, string> = {
   "value-curve": "vc-desc",
   "internal-analysis": "ia-desc",
   "swot-synthesis": "sw-desc",
+  "innovation-directions": "inn-desc",
 };
 
 const MODULE_TITLES: Record<string, string> = {
@@ -99,6 +102,7 @@ const MODULE_TITLES: Record<string, string> = {
   "value-curve": "Value Curve",
   "internal-analysis": "Internal Analysis",
   "swot-synthesis": "SWOT Synthesis",
+  "innovation-directions": "Innovation Directions",
 };
 
 // ── Translation Cache Hook ──
@@ -772,6 +776,7 @@ export default function CanvasPane({ moduleId }: { moduleId: string }) {
       case "value-curve": return <ValueCurvePane />;
       case "internal-analysis": return <VRIOPane {...translationProps} />;
       case "swot-synthesis": return <SWOTPane {...translationProps} />;
+      case "innovation-directions": return <InnovationDirectionsPane lang={diagramLang} />;
       default: return <BusinessModelDiagram {...translationProps} />;
     }
   };

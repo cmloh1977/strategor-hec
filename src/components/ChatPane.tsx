@@ -17,16 +17,18 @@ const MODULE_PILLAR_MAP: Record<string, { key: string; pillars: string[] }> = {
   "value-curve": { key: "valueCurve", pillars: ["valueCurve"] },
   "internal-analysis": { key: "vrio", pillars: ["valuable", "rare", "inimitable", "organized"] },
   "swot-synthesis": { key: "swot", pillars: ["strengths", "weaknesses", "opportunities", "threats"] },
+  "innovation-directions": { key: "innovationDirections", pillars: ["direction1", "direction2", "direction3"] },
 };
 
 // The order of steps and what comes next
-const STEP_ORDER = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis"];
+const STEP_ORDER = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis", "innovation-directions"];
 const STEP_NAMES: Record<string, string> = {
   "business-model": "Business Model",
   "external-analysis": "External Analysis (5 Forces)",
   "value-curve": "Value Curve (Strategy Canvas)",
   "internal-analysis": "Internal Analysis (VRIO)",
   "swot-synthesis": "SWOT Synthesis",
+  "innovation-directions": "Innovation Directions (3.14)",
 };
 
 interface Message {
@@ -38,7 +40,7 @@ interface Message {
 const PILLAR_DEF: Record<string, {
   name: string;
   emoji: string;
-  module: "businessModel" | "fiveForces" | "valueCurve" | "vrio" | "swot";
+  module: "businessModel" | "fiveForces" | "valueCurve" | "vrio" | "swot" | "innovationDirections";
 }> = {
   valueProposition: { name: "Value Proposition", emoji: "🎯", module: "businessModel" },
   valueArchitecture: { name: "Value Architecture", emoji: "⚙️", module: "businessModel" },
@@ -57,6 +59,9 @@ const PILLAR_DEF: Record<string, {
   weaknesses: { name: "Weaknesses", emoji: "⚠️", module: "swot" },
   opportunities: { name: "Opportunities", emoji: "🚀", module: "swot" },
   threats: { name: "Threats", emoji: "⚡", module: "swot" },
+  direction1: { name: "Innovation Direction 1", emoji: "🧭", module: "innovationDirections" },
+  direction2: { name: "Innovation Direction 2", emoji: "🧭", module: "innovationDirections" },
+  direction3: { name: "Innovation Direction 3", emoji: "🧭", module: "innovationDirections" },
 };
 
 function parsePopulateCommand(text: string): { populates: { pillar: string; points: string[] }[]; cleanText: string } {
@@ -94,6 +99,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `再びお会いできて嬉しいです。**${name}**の**内部**を見てみましょう。\n\n**VRIOフレームワーク**を使って主要な資源を評価します。\n\n*${name}の最も重要な資源や能力は何だと思いますか？*`;
       case "swot-synthesis":
         return `**${name}**のすべてを**統合**する時です。\n\nこれはゼロからのスタートではありません。ビジネスモデル、5つの力、バリューカーブ、VRIOの分析から得られた知見を基に、**SWOT候補**を一緒にレビューしましょう。\n\n各象限の候補を提示しますので、挑戦・修正・却下してください。準備はできましたか？`;
+      case "innovation-directions":
+        return `素晴らしい！分析が完了したので、次は**イノベーション**について考えましょう。\n\n左側にOdyssey 3.14の**14の方向性**が表示されています。これらは、ビジネスモデルを革新するための具体的な道筋です。\n\n**あなたのタスク**: ${name}にとって最も重要だと思う**3つの方向性**を選び、その理由を書いてから「AIチャレンジに提出」をクリックしてください。\n\nあなたの選択を、これまでの分析に基づいて検証します。`;
       default: return `**${name}**の分析を続けましょう。`;
     }
   }
@@ -109,6 +116,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `Ravi de vous revoir. Regardons **l'intérieur** de **${name}**.\n\nNous utiliserons le **framework VRIO** pour évaluer les ressources clés.\n\n*Quelle est la ressource ou capacité la plus importante de ${name} selon vous ?*`;
       case "swot-synthesis":
         return `Il est temps de **synthétiser** tout pour **${name}**.\n\nCe n'est pas un départ de zéro. À partir de vos analyses du Modèle d'Affaires, des 5 Forces, de la Courbe de Valeur et du VRIO, je vais proposer des **candidats SWOT** que nous examinerons ensemble.\n\nJe présenterai des éléments pour chaque quadrant — défiez, modifiez ou rejetez ce qui ne vous semble pas juste. Prêt ?`;
+      case "innovation-directions":
+        return `Excellent ! Votre analyse est complète. Passons maintenant à l'**innovation**.\n\nSur la gauche, vous voyez les **14 directions** d'Odyssey 3.14 — des pistes concrètes pour réinventer votre modèle d'affaires.\n\n**Votre mission** : choisissez les **3 directions** les plus pertinentes pour **${name}**, expliquez pourquoi, puis soumettez vos choix pour un challenge IA.\n\nJe confronterai vos choix à votre analyse stratégique.`;
       default: return `Continuons l'analyse de **${name}**.`;
     }
   }
@@ -124,6 +133,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `很高兴再次见到你。让我们审视**${name}**的**内部**。\n\n我们将使用**VRIO框架**来评估关键资源。\n\n*您认为${name}最重要的资源或能力是什么？*`;
       case "swot-synthesis":
         return `是时候为**${name}****综合**所有内容了。\n\n这不是从零开始。基于您的商业模式、五力、价值曲线和VRIO分析，我将提出**SWOT候选项**供我们一起审查。\n\n我会为每个象限提出建议——请挑战、修改或否决任何不合适的内容。准备好了吗？`;
+      case "innovation-directions":
+        return `太棒了！分析完成后，让我们开始**创新**思考。\n\n左侧展示了Odyssey 3.14的**14个方向** — 这些是重塑商业模式的具体路径。\n\n**您的任务**：选择对**${name}**最重要的**3个方向**，写下理由，然后提交接受AI挑战。\n\n我会根据您之前的分析来质疑您的选择。`;
       default: return `让我们继续分析**${name}**。`;
     }
   }
@@ -139,6 +150,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
       return `Good to see you again. Let's look **inward** at **${name}**.\n\nWe'll use the **VRIO framework** to evaluate key resources.\n\n*What do you believe is ${name}'s single most important resource or capability?*`;
     case "swot-synthesis":
       return `Time to **synthesize** everything for **${name}**.\n\nThis is not a blank slate. Based on your Business Model, 5 Forces, Value Curve, and VRIO analysis, I'll propose **SWOT candidates** for us to review together.\n\nI'll present draft items for each quadrant — challenge, modify, or reject anything that doesn't feel right. Ready?`;
+    case "innovation-directions":
+      return `Excellent! Your analysis is complete. Now let's think about **innovation**.\n\nOn the left, you can see the **14 Directions** from the Odyssey 3.14 framework — concrete pathways to reinvent your business model.\n\n**Your task**: Select the **3 directions** most relevant for **${name}**, write why each matters, then click "Submit for AI Challenge".\n\nI'll stress-test your choices against your entire strategic analysis.`;
     default:
       return `Let's continue analyzing **${name}**.`;
   }
@@ -146,7 +159,7 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
 
 export default function ChatPane({ moduleId }: { moduleId: string }) {
   const { user } = useAuth();
-  const { portfolio, populatePillar } = usePortfolio();
+  const { portfolio, populatePillar, populateInnovationDeepDive } = usePortfolio();
   const router = useRouter();
   const bizName = portfolio.myAnalysis?.businessName || "My Business";
 
@@ -199,8 +212,10 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
       const diagramState = portfolio.myAnalysis ? {
         businessModel: portfolio.myAnalysis.businessModel,
         fiveForces: portfolio.myAnalysis.fiveForces,
+        valueCurve: portfolio.myAnalysis.valueCurve,
         vrio: portfolio.myAnalysis.vrio,
         swot: portfolio.myAnalysis.swot,
+        innovationDirections: portfolio.myAnalysis.innovationDirections,
       } : {};
 
       const response = await fetch('/api/chat', {
@@ -247,7 +262,25 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     if (pendingPopulates.length === 0) return;
     const current = pendingPopulates[0];
     const def = PILLAR_DEF[current.pillar];
-    if (def) {
+    
+    // Special handling for innovation direction populates
+    if (def?.module === "innovationDirections" && moduleId === "innovation-directions") {
+      const inn = portfolio.myAnalysis?.innovationDirections;
+      const dirIndex = current.pillar === "direction1" ? 0 : current.pillar === "direction2" ? 1 : 2;
+      const directionId = inn?.selectedDirections?.[dirIndex]?.id;
+      if (directionId !== undefined) {
+        // Parse structured fields from populate points
+        const parseField = (prefix: string) => current.points.find(p => p.toLowerCase().startsWith(prefix.toLowerCase()))?.replace(new RegExp(`^${prefix}:?\\s*`, 'i'), '') || '';
+        populateInnovationDeepDive(directionId, {
+          idea: parseField('Idea'),
+          newValueProposition: parseField('New Value Proposition'),
+          newValueArchitecture: parseField('New Value Architecture'),
+          expectedContributions: parseField('Expected Contributions'),
+          keyBarriers: parseField('Key Barriers'),
+          firstStep: parseField('First Step'),
+        });
+      }
+    } else if (def) {
       populatePillar(def.module as "businessModel" | "fiveForces" | "vrio" | "swot", current.pillar, current.points);
     }
     const pillarName = def ? def.name : current.pillar;

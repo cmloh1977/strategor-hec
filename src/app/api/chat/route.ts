@@ -230,8 +230,74 @@ For each tension:
 After the stress test:
 "Would you like to go back and update any module based on what we just discussed, or are you satisfied with your analysis as it stands? Remember — your team will be building on this, so honesty now pays dividends later."
 
-### Module 6: Strategic Options
-Guide users to formulate strategic options grounded in their analysis. Challenge overly conservative or unrealistic proposals.
+### Module 6: Innovation Directions (Odyssey 3.14)
+
+This module has TWO PHASES. Check the INNOVATION STATE in the context below to determine which phase.
+
+**PHASE 1 — Direction Selection Challenge** (when innovationConfirmed = false)
+The student has browsed the 14 Odyssey 3.14 innovation directions and selected up to 3 with justifications. Your job is to CHALLENGE their selections — do NOT help them innovate yet. That comes in Phase 2.
+
+The 14 directions are:
+Value Proposition: (1) Reduce customer overall costs, (2) Reduce customer hassles, (3) Find non-customers, (4) Add functionality or emotion, (5) Explore other segments or industries, (6) Introduce other stakeholders, (7) Modify the revenue stream.
+Value Architecture: (8) Introduce a technology, (9) Modify steps in the value chain, (10) Eliminate or add value chain steps, (11) Identify new inputs, (12) Associate with competitors/customers/suppliers, (13) Identify complementors, (14) Leverage strategic resources.
+
+Draw on their ENTIRE prior analysis to challenge:
+- Business Model: What fragilities were identified? Does the chosen direction address them?
+- 5 Forces: Which forces are most threatening? Does this direction neutralize a threat?
+- Value Curve: Where are they undifferentiated? Does this direction create differentiation?
+- VRIO: What capabilities are NOT rare or NOT inimitable? Does this direction leverage a true strength or address a gap?
+- SWOT: What are their biggest weaknesses and threats? Are they ignoring an obvious direction?
+
+Challenge patterns:
+1. Does this direction ADDRESS a real weakness or threat from their analysis?
+2. Does this direction LEVERAGE a confirmed strength from VRIO?
+3. Are they MISSING a more strategically obvious direction given their analysis?
+4. Is their justification specific and evidence-based, or generic and vague?
+5. Would this direction be FEASIBLE given their value architecture constraints?
+
+Rules:
+- ONE question at a time — never more
+- Be constructively adversarial — challenge but don't dictate choices
+- NEVER suggest which directions to pick — only challenge their reasoning
+- Accept well-defended choices gracefully
+- Do NOT use any POPULATE blocks in Phase 1
+- If the student changes their selections, challenge the new ones
+
+**PHASE 2 — Innovation Deep Dive** (when innovationConfirmed = true)
+The student has confirmed their 3 directions. Now conduct a McKinsey-level deep dive into EACH direction, one at a time.
+
+For each direction, explore these areas through one-question-at-a-time conversation:
+1. What SPECIFICALLY would change in the business model? Be concrete.
+2. What's the new value proposition? New target customers? New pricing model?
+3. What changes in value architecture — value chain steps, partners, resources?
+4. What are the expected financial, environmental, and societal contributions?
+5. What's the biggest barrier — technology, talent, regulation, customer acceptance?
+6. What's the ONE concrete first step to pilot this?
+
+After sufficient exploration (minimum 5-7 exchanges per direction), summarize the innovation idea and ask the student to confirm. Then use POPULATE:
+
+[POPULATE:direction1]
+• Idea: [the core innovation idea in 1-2 sentences]
+• New Value Proposition: [how VP changes]
+• New Value Architecture: [how VA changes]
+• Expected Contributions: [financial/environmental/societal impact]
+• Key Barriers: [main obstacles]
+• First Step: [concrete pilot action]
+[/POPULATE]
+
+Use direction1 for the first confirmed direction, direction2 for the second, direction3 for the third.
+
+After ALL 3 directions are populated, do a cross-direction synthesis:
+- "Looking at your 3 innovation directions together — do they reinforce each other or conflict?"
+- "If you could only pursue ONE, which would it be and why?"
+- "What's the common strategic thread across your innovations?"
+
+Rules:
+- Minimum 5-7 exchanges per direction before allowing POPULATE
+- Reference prior analysis constantly (BM, 5F, VC, VRIO, SWOT)
+- Push for specificity — reject vague answers like "improve pricing" or "use technology"
+- Challenge overly optimistic projections
+- Work through directions sequentially — finish one before moving to the next
 `;
 
 export async function POST(req: Request) {
@@ -249,7 +315,7 @@ export async function POST(req: Request) {
     else if (moduleId === "value-curve") validPillars = "(no POPULATE for this module — student fills in the canvas directly)";
     else if (moduleId === "internal-analysis") validPillars = "valuable, rare, inimitable, organized";
     else if (moduleId === "swot-synthesis") validPillars = "strengths, weaknesses, opportunities, threats";
-    else if (moduleId === "strategic-options") validPillars = "option1, option2, option3";
+    else if (moduleId === "innovation-directions") validPillars = "direction1, direction2, direction3";
 
     // Build context from prior modules
     let priorContext = "";
@@ -311,8 +377,30 @@ export async function POST(req: Request) {
         if (parts.length) sections.push(`**SWOT Synthesis:**\n${parts.join("\n")}`);
       }
       
+      // Innovation Directions context
+      const inn = diagramState.innovationDirections;
+      if (inn?.selectedDirections?.length > 0) {
+        const selLines = inn.selectedDirections.map((d: any) => `Direction ${d.id}: ${d.name} (${d.pillar}) — Justification: ${d.justification}`);
+        sections.push(`**Innovation Directions (Selected):**\nConfirmed: ${inn.confirmed ? 'YES' : 'NO'}\n${selLines.join("\n")}`);
+        
+        // Include any populated deep dives
+        if (inn.deepDives) {
+          const ddLines = Object.entries(inn.deepDives)
+            .filter(([, dd]: [string, any]) => dd?.populated)
+            .map(([id, dd]: [string, any]) => `Direction ${id}: ${dd.idea}`);
+          if (ddLines.length > 0) {
+            sections.push(`**Innovation Deep Dives (Completed):**\n${ddLines.join("\n")}`);
+          }
+        }
+      }
+
       if (sections.length > 0) {
         priorContext = `\n\n## PRIOR ANALYSIS CONTEXT (from user's completed modules)\nThe user has already established the following insights in earlier modules. Reference these to maintain analytical continuity:\n\n${sections.join("\n\n")}`;
+      }
+
+      // Innovation-specific state hint
+      if (moduleId === "innovation-directions" && inn) {
+        priorContext += `\n\n## INNOVATION STATE\ninnovationConfirmed: ${inn.confirmed}\nselectedCount: ${inn.selectedDirections?.length || 0}\npopulatedCount: ${Object.values(inn.deepDives || {}).filter((d: any) => d?.populated).length}`;
       }
     }
 

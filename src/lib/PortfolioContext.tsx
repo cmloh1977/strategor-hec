@@ -52,6 +52,31 @@ export interface ValueCurveState {
   populated: boolean;
 }
 
+// ── Innovation Directions ──
+export interface InnovationDirection {
+  id: number;
+  name: string;
+  pillar: string;
+  justification: string;
+}
+
+export interface InnovationDeepDive {
+  idea: string;
+  newValueProposition: string;
+  newValueArchitecture: string;
+  expectedContributions: string;
+  keyBarriers: string;
+  firstStep: string;
+  populated: boolean;
+}
+
+export interface InnovationDirectionsState {
+  selectedDirections: InnovationDirection[];
+  confirmed: boolean;
+  deepDives: Record<number, InnovationDeepDive>;
+  synthesisComplete: boolean;
+}
+
 export interface AIAnalysis {
   businessModel: {
     valueProposition: { score: number; insight: string };
@@ -145,6 +170,7 @@ export interface MyAnalysis {
   valueCurve: ValueCurveState;
   vrio: VrioState;
   swot: SwotState;
+  innovationDirections?: InnovationDirectionsState;
 }
 
 // ── Portfolio State ──
@@ -171,6 +197,9 @@ const INIT_SWOT: SwotState = {
 };
 const INIT_VC: ValueCurveState = {
   factors: [], competitors: [], populated: false,
+};
+const INIT_INNOVATION: InnovationDirectionsState = {
+  selectedDirections: [], confirmed: false, deepDives: {}, synthesisComplete: false,
 };
 
 const COLORS = ["#E8634A", "#1EB5C4", "#6366f1", "#f59e0b", "#10b981"];
@@ -259,6 +288,9 @@ interface PortfolioContextType {
   setDiagramLanguage: (lang: AppLanguage) => void;
   populatePillar: (module: "businessModel" | "fiveForces" | "vrio" | "swot", pillar: string, points: string[]) => void;
   updateValueCurve: (state: ValueCurveState) => void;
+  updateInnovationSelections: (selections: InnovationDirection[]) => void;
+  confirmInnovationSelections: () => void;
+  populateInnovationDeepDive: (directionId: number, deepDive: Omit<InnovationDeepDive, 'populated'>) => void;
   myAnalysisComplete: boolean;
   myAnalysisProgress: { done: number; total: number; percent: number };
 
@@ -355,6 +387,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         valueCurve: INIT_VC,
         vrio: INIT_VRIO,
         swot: INIT_SWOT,
+        innovationDirections: INIT_INNOVATION,
       },
     }));
   };
@@ -370,7 +403,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     update((p) => ({ ...p, myAnalysis: null, shareCode: null }));
     // Also clear chat docs from Firestore
     if (user) {
-      const chatModules = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis"];
+      const chatModules = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis", "innovation-directions"];
       chatModules.forEach(async (mod) => {
         try {
           const { deleteDoc, doc } = await import("firebase/firestore");
@@ -409,6 +442,58 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         myAnalysis: {
           ...p.myAnalysis,
           valueCurve: state,
+        },
+      };
+    });
+  };
+
+  const updateInnovationSelections = (selections: InnovationDirection[]) => {
+    update((p) => {
+      if (!p.myAnalysis) return p;
+      return {
+        ...p,
+        myAnalysis: {
+          ...p.myAnalysis,
+          innovationDirections: {
+            ...(p.myAnalysis.innovationDirections || INIT_INNOVATION),
+            selectedDirections: selections,
+          },
+        },
+      };
+    });
+  };
+
+  const confirmInnovationSelections = () => {
+    update((p) => {
+      if (!p.myAnalysis) return p;
+      return {
+        ...p,
+        myAnalysis: {
+          ...p.myAnalysis,
+          innovationDirections: {
+            ...(p.myAnalysis.innovationDirections || INIT_INNOVATION),
+            confirmed: true,
+          },
+        },
+      };
+    });
+  };
+
+  const populateInnovationDeepDive = (directionId: number, deepDive: Omit<InnovationDeepDive, 'populated'>) => {
+    update((p) => {
+      if (!p.myAnalysis) return p;
+      const current = p.myAnalysis.innovationDirections || INIT_INNOVATION;
+      return {
+        ...p,
+        myAnalysis: {
+          ...p.myAnalysis,
+          innovationDirections: {
+            ...current,
+            deepDives: {
+              ...current.deepDives,
+              [directionId]: { ...deepDive, populated: true },
+            },
+          },
         },
       };
     });
@@ -558,6 +643,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         setDiagramLanguage,
         populatePillar,
         updateValueCurve,
+        updateInnovationSelections,
+        confirmInnovationSelections,
+        populateInnovationDeepDive,
         myAnalysisComplete,
         myAnalysisProgress,
         generateShareCode,

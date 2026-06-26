@@ -5,7 +5,8 @@ import { usePortfolio } from "@/lib/PortfolioContext";
 import ChatPane from "@/components/ChatPane";
 import CanvasPane from "@/components/CanvasPane";
 import PortfolioDashboard from "@/components/PortfolioDashboard";
-import ConstellationView from "@/components/ConstellationView";
+// ConstellationView removed for HEC v11 — replaced by Innovation Directions module
+// import ConstellationView from "@/components/ConstellationView";
 
 export default function JourneyPage() {
   const searchParams = useSearchParams();
@@ -57,10 +58,7 @@ export default function JourneyPage() {
     );
   }
 
-  // Phase 2: Team Constellation
-  if (view === "constellation") {
-    return <ConstellationView onBack={() => handleNavigate("dashboard")} />;
-  }
+  // Constellation removed for HEC v11 — innovation is now handled as a module step
 
   return <PortfolioDashboard onNavigate={handleNavigate} />;
 }
