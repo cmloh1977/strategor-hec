@@ -18,6 +18,7 @@ const TRANSLATIONS: Record<string, Record<AppLanguage, string>> = {
   "ia-desc": { en: "Evaluate key resources and capabilities using the VRIO framework.", ja: "VRIOフレームワークを使って、主要な資源と能力を評価しましょう。", fr: "Évaluez vos ressources et capacités clés avec le framework VRIO.", zh: "使用VRIO框架评估关键资源和能力。" },
   "sw-desc": { en: "Combine your external and internal analyses into a comprehensive SWOT.", ja: "外部分析と内部分析を包括的なSWOTに統合しましょう。", fr: "Combinez vos analyses externe et interne en une synthèse SWOT complète.", zh: "将外部和内部分析合并为综合SWOT。" },
   "inn-desc": { en: "Select 3 innovation directions to reinvent your business model.", ja: "ビジネスモデルを革新する3つの方向性を選択してください。", fr: "Sélectionnez 3 directions d'innovation pour réinventer votre modèle d'affaires.", zh: "选择3个创新方向来重塑您的商业模式。" },
+  "dd-desc": { en: "Deep dive into each of your 3 chosen innovation directions.", ja: "選択した3つのイノベーション方向性を深掘りします。", fr: "Approfondissez chacune de vos 3 directions d'innovation choisies.", zh: "深入研究您选择的3个创新方向。" },
   // Business Model segments
   "Value Proposition": { en: "Value Proposition", ja: "価値提案", fr: "Proposition de Valeur", zh: "价值主张" },
   "Who? What?": { en: "Who? What?", ja: "誰に？何を？", fr: "Qui ? Quoi ?", zh: "谁？什么？" },
@@ -94,6 +95,7 @@ const MODULE_DESCS: Record<string, string> = {
   "internal-analysis": "ia-desc",
   "swot-synthesis": "sw-desc",
   "innovation-directions": "inn-desc",
+  "innovation-deepdive": "dd-desc",
 };
 
 const MODULE_TITLES: Record<string, string> = {
@@ -103,6 +105,7 @@ const MODULE_TITLES: Record<string, string> = {
   "internal-analysis": "Internal Analysis",
   "swot-synthesis": "SWOT Synthesis",
   "innovation-directions": "Innovation Directions",
+  "innovation-deepdive": "Deep Dive",
 };
 
 // ── Translation Cache Hook ──
@@ -776,7 +779,8 @@ export default function CanvasPane({ moduleId }: { moduleId: string }) {
       case "value-curve": return <ValueCurvePane />;
       case "internal-analysis": return <VRIOPane {...translationProps} />;
       case "swot-synthesis": return <SWOTPane {...translationProps} />;
-      case "innovation-directions": return <InnovationDirectionsPane lang={diagramLang} />;
+      case "innovation-directions": return <InnovationDirectionsPane lang={diagramLang} level="select" />;
+      case "innovation-deepdive": return <InnovationDirectionsPane lang={diagramLang} level="deepdive" />;
       default: return <BusinessModelDiagram {...translationProps} />;
     }
   };

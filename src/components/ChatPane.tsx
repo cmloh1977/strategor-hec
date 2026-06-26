@@ -18,10 +18,11 @@ const MODULE_PILLAR_MAP: Record<string, { key: string; pillars: string[] }> = {
   "internal-analysis": { key: "vrio", pillars: ["valuable", "rare", "inimitable", "organized"] },
   "swot-synthesis": { key: "swot", pillars: ["strengths", "weaknesses", "opportunities", "threats"] },
   "innovation-directions": { key: "innovationDirections", pillars: ["direction1", "direction2", "direction3"] },
+  "innovation-deepdive": { key: "innovationDirections", pillars: ["direction1", "direction2", "direction3"] },
 };
 
 // The order of steps and what comes next
-const STEP_ORDER = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis", "innovation-directions"];
+const STEP_ORDER = ["business-model", "external-analysis", "value-curve", "internal-analysis", "swot-synthesis", "innovation-directions", "innovation-deepdive"];
 const STEP_NAMES: Record<string, string> = {
   "business-model": "Business Model",
   "external-analysis": "External Analysis (5 Forces)",
@@ -29,6 +30,7 @@ const STEP_NAMES: Record<string, string> = {
   "internal-analysis": "Internal Analysis (VRIO)",
   "swot-synthesis": "SWOT Synthesis",
   "innovation-directions": "Innovation Directions (3.14)",
+  "innovation-deepdive": "Innovation Deep Dive",
 };
 
 interface Message {
@@ -101,6 +103,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `**${name}**のすべてを**統合**する時です。\n\nこれはゼロからのスタートではありません。ビジネスモデル、5つの力、バリューカーブ、VRIOの分析から得られた知見を基に、**SWOT候補**を一緒にレビューしましょう。\n\n各象限の候補を提示しますので、挑戦・修正・却下してください。準備はできましたか？`;
       case "innovation-directions":
         return `素晴らしい！分析が完了したので、次は**イノベーション**について考えましょう。\n\n左側にOdyssey 3.14の**14の方向性**が表示されています。これらは、ビジネスモデルを革新するための具体的な道筋です。\n\n**あなたのタスク**: ${name}にとって最も重要だと思う**3つの方向性**を選び、その理由を書いてから「AIチャレンジに提出」をクリックしてください。\n\nあなたの選択を、これまでの分析に基づいて検証します。`;
+      case "innovation-deepdive":
+        return `${name}の**イノベーション・ディープダイブ**へようこそ！\n\n確認した3つの方向性について、マッキンゼーレベルの深い分析を行います。\n\n左の方向性タブから始めましょう。まず、**最初に掘り下げたい方向性**はどれですか？`;
       default: return `**${name}**の分析を続けましょう。`;
     }
   }
@@ -118,6 +122,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `Il est temps de **synthétiser** tout pour **${name}**.\n\nCe n'est pas un départ de zéro. À partir de vos analyses du Modèle d'Affaires, des 5 Forces, de la Courbe de Valeur et du VRIO, je vais proposer des **candidats SWOT** que nous examinerons ensemble.\n\nJe présenterai des éléments pour chaque quadrant — défiez, modifiez ou rejetez ce qui ne vous semble pas juste. Prêt ?`;
       case "innovation-directions":
         return `Excellent ! Votre analyse est complète. Passons maintenant à l'**innovation**.\n\nSur la gauche, vous voyez les **14 directions** d'Odyssey 3.14 — des pistes concrètes pour réinventer votre modèle d'affaires.\n\n**Votre mission** : choisissez les **3 directions** les plus pertinentes pour **${name}**, expliquez pourquoi, puis soumettez vos choix pour un challenge IA.\n\nJe confronterai vos choix à votre analyse stratégique.`;
+      case "innovation-deepdive":
+        return `Bienvenue dans le **Deep Dive Innovation** de ${name} !\n\nNous allons maintenant explorer en profondeur chacune de vos 3 directions confirmées avec une analyse de niveau McKinsey.\n\nChoisissez un onglet de direction à gauche. **Par quelle direction souhaitez-vous commencer ?**`;
       default: return `Continuons l'analyse de **${name}**.`;
     }
   }
@@ -135,6 +141,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
         return `是时候为**${name}****综合**所有内容了。\n\n这不是从零开始。基于您的商业模式、五力、价值曲线和VRIO分析，我将提出**SWOT候选项**供我们一起审查。\n\n我会为每个象限提出建议——请挑战、修改或否决任何不合适的内容。准备好了吗？`;
       case "innovation-directions":
         return `太棒了！分析完成后，让我们开始**创新**思考。\n\n左侧展示了Odyssey 3.14的**14个方向** — 这些是重塑商业模式的具体路径。\n\n**您的任务**：选择对**${name}**最重要的**3个方向**，写下理由，然后提交接受AI挑战。\n\n我会根据您之前的分析来质疑您的选择。`;
+      case "innovation-deepdive":
+        return `欢迎来到${name}的**创新深度探索**！\n\n我们将对您确认的3个方向进行麦肯锡级别的深入分析。\n\n从左侧选择一个方向标签。**您想先深入哪个方向？**`;
       default: return `让我们继续分析**${name}**。`;
     }
   }
@@ -152,6 +160,8 @@ function getGreeting(moduleId: string, bizName: string, lang?: string): string {
       return `Time to **synthesize** everything for **${name}**.\n\nThis is not a blank slate. Based on your Business Model, 5 Forces, Value Curve, and VRIO analysis, I'll propose **SWOT candidates** for us to review together.\n\nI'll present draft items for each quadrant — challenge, modify, or reject anything that doesn't feel right. Ready?`;
     case "innovation-directions":
       return `Excellent! Your analysis is complete. Now let's think about **innovation**.\n\nOn the left, you can see the **14 Directions** from the Odyssey 3.14 framework — concrete pathways to reinvent your business model.\n\n**Your task**: Select the **3 directions** most relevant for **${name}**, write why each matters, then click "Submit for AI Challenge".\n\nI'll stress-test your choices against your entire strategic analysis.`;
+    case "innovation-deepdive":
+      return `Welcome to the **Innovation Deep Dive** for ${name}!\n\nWe'll now explore each of your 3 confirmed directions in depth with McKinsey-level analysis.\n\nSelect a direction tab on the left. **Which direction would you like to start with?**`;
     default:
       return `Let's continue analyzing **${name}**.`;
   }
@@ -176,6 +186,19 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
   const [transitioning, setTransitioning] = useState<{ nextStep: string; nextStepName: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Reset chat state when switching modules (moduleId changes)
+  const prevModuleRef = useRef(moduleId);
+  useEffect(() => {
+    if (prevModuleRef.current !== moduleId) {
+      prevModuleRef.current = moduleId;
+      // Reset to greeting — Firestore listener below will overwrite if saved history exists
+      setMessages([{ id: "1", role: "coach", text: getGreeting(moduleId, bizName, chatLang) }]);
+      setPendingPopulates([]);
+      setTransitioning(null);
+      setInput("");
+    }
+  }, [moduleId, bizName, chatLang]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping, pendingPopulates]);
@@ -191,6 +214,43 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     });
     return () => unsub();
   }, [user, chatDocId]);
+
+  // Listen for innovation-challenge event (user submitted selections for AI challenge)
+  useEffect(() => {
+    if (moduleId !== "innovation-directions") return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.selections) return;
+      const selectionsSummary = detail.selections
+        .map((s: any) => `**${s.name}** (${s.pillar}): ${s.justification}`)
+        .join("\n\n");
+      const challengePrompt = `I've selected my 3 innovation directions. Please challenge my reasoning:\n\n${selectionsSummary}`;
+      sendMessage(challengePrompt);
+    };
+    window.addEventListener("innovation-challenge", handler);
+    return () => window.removeEventListener("innovation-challenge", handler);
+  }, [moduleId]);
+
+  // Listen for innovation-confirmed event (user confirmed final 3 directions)
+  useEffect(() => {
+    if (moduleId !== "innovation-directions") return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const dirNames = detail?.directions?.join(", ") || "your 3 directions";
+      const confirmMsg: Message = {
+        id: Date.now().toString(),
+        role: "coach",
+        text: `🎉 **Your 3 innovation directions are now locked in!**\n\nYou've confirmed: ${dirNames}.\n\nNow it's time to go deeper. Head over to the **🔍 Deep Dive** section in the sidebar to explore each direction with McKinsey-level strategic analysis. I'll guide you through each one, asking the tough questions to validate your ideas and sharpen your implementation plan.\n\n**→ Click "Deep Dive" in the Innovation Lab sidebar to continue.**`,
+      };
+      setMessages((prev) => {
+        const updated = [...prev, confirmMsg];
+        saveToFirestore(updated);
+        return updated;
+      });
+    };
+    window.addEventListener("innovation-confirmed", handler);
+    return () => window.removeEventListener("innovation-confirmed", handler);
+  }, [moduleId]);
 
   const saveToFirestore = async (newMessages: Message[]) => {
     if (!user) return;
@@ -264,7 +324,7 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     const def = PILLAR_DEF[current.pillar];
     
     // Special handling for innovation direction populates
-    if (def?.module === "innovationDirections" && moduleId === "innovation-directions") {
+    if (def?.module === "innovationDirections" && (moduleId === "innovation-directions" || moduleId === "innovation-deepdive")) {
       const inn = portfolio.myAnalysis?.innovationDirections;
       const dirIndex = current.pillar === "direction1" ? 0 : current.pillar === "direction2" ? 1 : 2;
       const directionId = inn?.selectedDirections?.[dirIndex]?.id;

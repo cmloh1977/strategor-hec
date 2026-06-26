@@ -6,7 +6,7 @@ import { TeamProvider, useTeam } from "@/lib/TeamContext";
 import { MASTER_EMAIL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LogOut, LayoutDashboard, BookOpen, Compass, TrendingUp, Layers, ShieldAlert, Lock, Zap, BarChart3, MessageSquare, Target, Settings, KeyRound, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { LogOut, LayoutDashboard, BookOpen, Compass, TrendingUp, Layers, ShieldAlert, Lock, Zap, Target, Settings, KeyRound, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
@@ -22,8 +22,9 @@ const ANALYSIS_STEPS = [
 function SidebarContent() {
   const { user, logout, changePassword } = useAuth();
   const router = useRouter();
-  const { portfolio, phase2Unlocked, teamCards } = usePortfolio();
-  const { team, isInTeam } = useTeam();
+  const { portfolio, myAnalysisComplete } = usePortfolio();
+  // Team context kept for compatibility but not used in sidebar
+  useTeam();
   const searchParams = useSearchParams();
 
   const currentView = searchParams.get("view") || "dashboard";
@@ -93,7 +94,7 @@ function SidebarContent() {
           <Zap className="h-6 w-6 text-indigo-600 mr-3" />
           <h2 className="font-bold text-lg text-slate-800 tracking-tight flex items-center">
             Strategy Coach
-            <span className="ml-2 bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">v10.0-hec</span>
+            <span className="ml-2 bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">v11.0-hec</span>
           </h2>
         </div>
 
@@ -141,40 +142,51 @@ function SidebarContent() {
             </>
           )}
 
-          {/* Team Constellation Section */}
-          <p className="px-2 pt-6 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-            👥 Team Constellation
-            {teamCards.length > 0 && (
-              <span className="ml-2 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-                {teamCards.length}
-              </span>
-            )}
-          </p>
-
-          <Link
-            href={isInTeam ? "/journey?view=constellation" : "#"}
-            className={clsx(
-              "flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-              currentView === "constellation"
-                ? "bg-indigo-50 text-indigo-700"
-                : isInTeam
-                  ? "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  : "text-slate-300 cursor-not-allowed"
-            )}
-            onClick={(e) => { if (!isInTeam) e.preventDefault(); }}
-          >
-            {isInTeam ? (
-              <BarChart3 className={clsx("h-5 w-5", currentView === "constellation" ? "text-indigo-500" : "text-slate-400")} />
-            ) : (
-              <Lock className="h-5 w-5 text-slate-300" />
-            )}
-            <span>Constellation</span>
-            {team && (
-              <span className="ml-auto text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">
-                {team.memberCards.length}
-              </span>
-            )}
-          </Link>
+          {/* Innovation Lab Section */}
+          {myAnalysisComplete && (
+            <>
+              <p className="px-2 pt-6 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                🚀 Innovation Lab
+              </p>
+              <div className="ml-1 pl-3 border-l-2 border-slate-200 space-y-0.5">
+                <Link
+                  href="/journey?view=analysis&step=innovation-directions"
+                  className={clsx(
+                    "flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors",
+                    currentView === "analysis" && currentStep === "innovation-directions"
+                      ? "bg-indigo-50 text-indigo-700 font-semibold"
+                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                  )}
+                >
+                  <Target className={clsx("h-4 w-4", currentView === "analysis" && currentStep === "innovation-directions" ? "text-indigo-500" : "text-slate-400")} />
+                  <span>14 Directions</span>
+                </Link>
+                {(() => {
+                  const innConfirmed = portfolio.myAnalysis?.innovationDirections?.confirmed;
+                  return (
+                    <Link
+                      href={innConfirmed ? "/journey?view=analysis&step=innovation-deepdive" : "#"}
+                      onClick={(e) => { if (!innConfirmed) e.preventDefault(); }}
+                      className={clsx(
+                        "flex items-center gap-2 px-2 py-2 rounded-md text-sm transition-colors",
+                        currentView === "analysis" && currentStep === "innovation-deepdive"
+                          ? "bg-indigo-50 text-indigo-700 font-semibold"
+                          : innConfirmed
+                            ? "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                            : "text-slate-300 cursor-not-allowed"
+                      )}
+                    >
+                      {innConfirmed
+                        ? <Compass className={clsx("h-4 w-4", currentView === "analysis" && currentStep === "innovation-deepdive" ? "text-indigo-500" : "text-slate-400")} />
+                        : <Lock className="h-4 w-4 text-slate-300" />
+                      }
+                      <span>Deep Dive</span>
+                    </Link>
+                  );
+                })()}
+              </div>
+            </>
+          )}
         </nav>
       </div>
 

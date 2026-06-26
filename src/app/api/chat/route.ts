@@ -316,6 +316,7 @@ export async function POST(req: Request) {
     else if (moduleId === "internal-analysis") validPillars = "valuable, rare, inimitable, organized";
     else if (moduleId === "swot-synthesis") validPillars = "strengths, weaknesses, opportunities, threats";
     else if (moduleId === "innovation-directions") validPillars = "direction1, direction2, direction3";
+    else if (moduleId === "innovation-deepdive") validPillars = "direction1, direction2, direction3";
 
     // Build context from prior modules
     let priorContext = "";
@@ -399,7 +400,7 @@ export async function POST(req: Request) {
       }
 
       // Innovation-specific state hint
-      if (moduleId === "innovation-directions" && inn) {
+      if ((moduleId === "innovation-directions" || moduleId === "innovation-deepdive") && inn) {
         priorContext += `\n\n## INNOVATION STATE\ninnovationConfirmed: ${inn.confirmed}\nselectedCount: ${inn.selectedDirections?.length || 0}\npopulatedCount: ${Object.values(inn.deepDives || {}).filter((d: any) => d?.populated).length}`;
       }
     }
