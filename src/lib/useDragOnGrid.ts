@@ -24,7 +24,7 @@ export function useDragOnGrid(
       if (!gridRef.current) return { x: 50, y: 50 };
       const rect = gridRef.current.getBoundingClientRect();
       const x = Math.max(2, Math.min(98, ((clientX - rect.left) / rect.width) * 100));
-      // Invert Y: top of grid = 100% (intense dynamism), bottom = 0% (stable)
+      // Invert Y: top of grid = 100% (favorable market environment), bottom = 0% (unfavorable)
       const rawY = ((clientY - rect.top) / rect.height) * 100;
       const y = Math.max(2, Math.min(98, 100 - rawY));
       return { x, y };

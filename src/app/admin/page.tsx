@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { MASTER_EMAIL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
-import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter, Pencil, Check, X, MessageSquare } from "lucide-react";
+import { Users, UserPlus, Trash2, Key, Loader2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw, BarChart3, Circle, Upload, Download, FileSpreadsheet, Filter, Pencil, Check, X, MessageSquare, Clock } from "lucide-react";
 import clsx from "clsx";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, deleteUser, signOut } from "firebase/auth";
@@ -73,12 +73,14 @@ interface ParticipantProgress {
   modules: {
     businessModel: { done: number; total: number };
     fiveForces: { done: number; total: number };
+    valueCurve: { done: number; total: number };
     vrio: { done: number; total: number };
     swot: { done: number; total: number };
   };
   status: "Not Started" | "In Progress" | "Completed";
   currentModule: string;
   engagement: EngagementMetrics;
+  lastLogin: string | null;
 }
 
 const CHAT_MODULES = ["business-model", "external-analysis", "internal-analysis", "swot-synthesis"];
@@ -127,10 +129,11 @@ function calcEngagement(chats: { moduleId: string; messages: { role: string; tex
 function calcProgress(p: PortfolioSnapshot | null): ParticipantProgress["progress"] & { modules: ParticipantProgress["modules"]; status: ParticipantProgress["status"]; currentModule: string } {
   if (!p?.myAnalysis) {
     return {
-      done: 0, total: 16, percent: 0,
+      done: 0, total: 17, percent: 0,
       modules: {
         businessModel: { done: 0, total: 3 },
         fiveForces: { done: 0, total: 5 },
+        valueCurve: { done: 0, total: 1 },
         vrio: { done: 0, total: 4 },
         swot: { done: 0, total: 4 },
       },
@@ -142,35 +145,38 @@ function calcProgress(p: PortfolioSnapshot | null): ParticipantProgress["progres
   const a = p.myAnalysis;
   const bm = [a.businessModel.valueProposition, a.businessModel.valueArchitecture, a.businessModel.contributions].filter(p => p?.populated).length;
   const ff = [a.fiveForces.newEntrants, a.fiveForces.suppliers, a.fiveForces.rivalry, a.fiveForces.buyers, a.fiveForces.substitutes].filter(p => p?.populated).length;
+  const vc = (a as any).valueCurve?.populated ? 1 : 0;
   const vr = [a.vrio.valuable, a.vrio.rare, a.vrio.inimitable, a.vrio.organized].filter(p => p?.populated).length;
   const sw = [a.swot.strengths, a.swot.weaknesses, a.swot.opportunities, a.swot.threats].filter(p => p?.populated).length;
 
-  const done = bm + ff + vr + sw;
-  const percent = Math.round((done / 16) * 100);
+  const done = bm + ff + vc + vr + sw;
+  const percent = Math.round((done / 17) * 100);
 
   let currentModule = "—";
   let status: ParticipantProgress["status"] = "Not Started";
 
-  if (done === 16) {
+  if (done === 17) {
     status = "Completed";
     currentModule = "All Complete";
   } else if (done > 0) {
     status = "In Progress";
     if (sw > 0 && sw < 4) currentModule = "SWOT Synthesis";
     else if (vr > 0 && vr < 4) currentModule = "Internal Analysis (VRIO)";
+    else if (ff === 5 && vc === 0) currentModule = "Value Curve";
     else if (ff > 0 && ff < 5) currentModule = "External Analysis (5 Forces)";
     else if (bm > 0 && bm < 3) currentModule = "Business Model";
     else if (bm === 3 && ff === 0) currentModule = "External Analysis (5 Forces)";
-    else if (ff === 5 && vr === 0) currentModule = "Internal Analysis (VRIO)";
+    else if (vc === 1 && vr === 0) currentModule = "Internal Analysis (VRIO)";
     else if (vr === 4 && sw === 0) currentModule = "SWOT Synthesis";
     else currentModule = "In Progress";
   }
 
   return {
-    done, total: 16, percent,
+    done, total: 17, percent,
     modules: {
       businessModel: { done: bm, total: 3 },
       fiveForces: { done: ff, total: 5 },
+      valueCurve: { done: vc, total: 1 },
       vrio: { done: vr, total: 4 },
       swot: { done: sw, total: 4 },
     },
@@ -204,6 +210,12 @@ export default function AdminDashboard() {
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Bulk delete
+  const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Reset password
   const [resetTarget, setResetTarget] = useState<UserRecord | null>(null);
@@ -244,14 +256,31 @@ export default function AdminDashboard() {
       snap.forEach((d) => list.push(d.data() as UserRecord));
       list.sort((a, b) => a.email.localeCompare(b.email));
       setUsers(list);
-      await loadProgress(list);
+
+      // Fetch lastSignIn from admin API
+      let lastSignInMap: Record<string, string> = {};
+      try {
+        const res = await fetch("/api/admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list", adminEmail: user?.email }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          for (const u of data.users || []) {
+            if (u.lastSignIn) lastSignInMap[u.uid] = u.lastSignIn;
+          }
+        }
+      } catch (_) { /* non-critical */ }
+
+      await loadProgress(list, lastSignInMap);
     } catch (e) {
       console.error("Failed to load users:", e);
     }
     setLoadingUsers(false);
   };
 
-  const loadProgress = async (userList: UserRecord[]) => {
+  const loadProgress = async (userList: UserRecord[], lastSignInMap: Record<string, string> = {}) => {
     setLoadingProgress(true);
     const results: ParticipantProgress[] = [];
 
@@ -288,17 +317,19 @@ export default function AdminDashboard() {
           status: prog.status,
           currentModule: prog.currentModule,
           engagement,
+          lastLogin: lastSignInMap[u.uid] || null,
         });
       } catch (e) {
         console.error(`Failed to load progress for ${u.email}:`, e);
         results.push({
           user: u,
           portfolio: null,
-          progress: { done: 0, total: 16, percent: 0 },
-          modules: { businessModel: { done: 0, total: 3 }, fiveForces: { done: 0, total: 5 }, vrio: { done: 0, total: 4 }, swot: { done: 0, total: 4 } },
+          progress: { done: 0, total: 17, percent: 0 },
+          modules: { businessModel: { done: 0, total: 3 }, fiveForces: { done: 0, total: 5 }, valueCurve: { done: 0, total: 1 }, vrio: { done: 0, total: 4 }, swot: { done: 0, total: 4 } },
           status: "Not Started",
           currentModule: "—",
           engagement: emptyEngagement,
+          lastLogin: lastSignInMap[u.uid] || null,
         });
       }
     }
@@ -328,8 +359,8 @@ export default function AdminDashboard() {
         uid: result.user.uid,
         createdAt: new Date().toISOString(),
         password: newPassword.trim(),
-        name: newName.trim() || undefined,
-        cohort: newCohort.trim() || undefined,
+        ...(newName.trim() ? { name: newName.trim() } : {}),
+        ...(newCohort.trim() ? { cohort: newCohort.trim() } : {}),
       };
       await setDoc(doc(db, "_admin_users", result.user.uid), record);
 
@@ -412,8 +443,8 @@ export default function AdminDashboard() {
             uid: result.user.uid,
             createdAt: new Date().toISOString(),
             password,
-            name: name || undefined,
-            cohort: cohort || undefined,
+            ...(name ? { name } : {}),
+            ...(cohort ? { cohort } : {}),
           };
           await setDoc(doc(db, "_admin_users", result.user.uid), record);
         } catch (err: any) {
@@ -459,6 +490,56 @@ export default function AdminDashboard() {
     setDeleting(false);
   };
 
+  const handleBulkDelete = async () => {
+    const toDelete = users.filter(u => selectedUids.has(u.uid));
+    if (toDelete.length === 0) return;
+    setBulkDeleting(true);
+    setBulkDeleteProgress({ current: 0, total: toDelete.length });
+    const errors: string[] = [];
+    for (let i = 0; i < toDelete.length; i++) {
+      const record = toDelete[i];
+      setBulkDeleteProgress({ current: i + 1, total: toDelete.length });
+      let secondaryApp: any = null;
+      try {
+        const { auth: secondaryAuth, app } = getSecondaryAuth();
+        secondaryApp = app;
+        if (record.password) {
+          const cred = await signInWithEmailAndPassword(secondaryAuth, record.email, record.password);
+          await deleteUser(cred.user);
+        }
+        try { await deleteApp(app); secondaryApp = null; } catch (_) {}
+        await deleteDoc(doc(db, "_admin_users", record.uid));
+      } catch (err: any) {
+        if (secondaryApp) { try { await deleteApp(secondaryApp); } catch (_) {} }
+        errors.push(`${record.email}: ${err.message}`);
+      }
+    }
+    if (errors.length > 0) {
+      alert(`Bulk delete completed with ${errors.length} error(s):\n${errors.join("\n")}`);
+    }
+    setSelectedUids(new Set());
+    setBulkDeleteConfirm(false);
+    setBulkDeleteProgress(null);
+    setBulkDeleting(false);
+    await loadUsers();
+  };
+
+  const toggleSelectUser = (uid: string) => {
+    setSelectedUids(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUids.size === filteredUsers.length) {
+      setSelectedUids(new Set());
+    } else {
+      setSelectedUids(new Set(filteredUsers.map(u => u.uid)));
+    }
+  };
+
   const handleResetPassword = async (record: UserRecord) => {
     if (!resetPass.trim()) return;
     setResetting(true);
@@ -499,7 +580,7 @@ export default function AdminDashboard() {
   if (loading || !user || user.email?.toLowerCase() !== MASTER_EMAIL.toLowerCase()) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-10 w-10 animate-spin text-red-600" />
+        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
       </div>
     );
   }
@@ -533,8 +614,8 @@ export default function AdminDashboard() {
               <button onClick={() => router.push("/journey")} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">GALP Admin Dashboard</h1>
-              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.8-galp</span>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">HEC Admin Dashboard</h1>
+              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v11.0-hec</span>
             </div>
             <p className="text-sm text-slate-500 ml-8">Monitor participant progress and manage accounts.</p>
           </div>
@@ -606,7 +687,7 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-red-600" />
+                <BarChart3 className="h-5 w-5 text-indigo-600" />
                 <h2 className="font-bold text-slate-800">Participant Progress</h2>
               </div>
               <span className="text-xs text-slate-400">{filteredParticipants.length} participants</span>
@@ -664,6 +745,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-4 mt-1.5">
                           <ModuleDots label="BM" done={p.modules.businessModel.done} total={p.modules.businessModel.total} />
                           <ModuleDots label="5F" done={p.modules.fiveForces.done} total={p.modules.fiveForces.total} />
+                          <ModuleDots label="VC" done={p.modules.valueCurve.done} total={p.modules.valueCurve.total} />
                           <ModuleDots label="VRIO" done={p.modules.vrio.done} total={p.modules.vrio.total} />
                           <ModuleDots label="SWOT" done={p.modules.swot.done} total={p.modules.swot.total} />
                         </div>
@@ -672,8 +754,8 @@ export default function AdminDashboard() {
                       {/* Engagement Score */}
                       <EngagementBadge engagement={p.engagement} />
 
-                      {/* Business name */}
-                      <div className="w-32 flex-shrink-0 text-right">
+                      {/* Business name + Last Login */}
+                      <div className="w-36 flex-shrink-0 text-right">
                         {p.portfolio?.myAnalysis ? (
                           <p className="text-xs font-medium text-slate-600 truncate">{p.portfolio.myAnalysis.businessName}</p>
                         ) : (
@@ -682,6 +764,10 @@ export default function AdminDashboard() {
                         {p.portfolio?.shareCode && (
                           <p className="text-[10px] font-mono text-indigo-500 mt-0.5">Code: {p.portfolio.shareCode}</p>
                         )}
+                        <p className="flex items-center justify-end gap-1 text-[10px] text-slate-400 mt-0.5">
+                          <Clock className="h-2.5 w-2.5" />
+                          {p.lastLogin ? new Date(p.lastLogin).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -697,7 +783,7 @@ export default function AdminDashboard() {
             {/* Create User Form */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <UserPlus className="h-5 w-5 text-red-600" />
+                <UserPlus className="h-5 w-5 text-indigo-600" />
                 <h2 className="font-bold text-slate-800">Create New User</h2>
               </div>
               <form onSubmit={handleCreate} className="space-y-3">
@@ -729,7 +815,7 @@ export default function AdminDashboard() {
                       className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20" />
                   </div>
                   <button type="submit" disabled={creating}
-                    className="px-6 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap">
+                    className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap">
                     {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create User"}
                   </button>
                 </div>
@@ -808,7 +894,18 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
                 <Users className="h-5 w-5 text-indigo-600" />
                 <h2 className="font-bold text-slate-800">Registered Users</h2>
-                <span className="ml-auto text-xs text-slate-400 font-medium">{filteredUsers.length} users</span>
+                <div className="ml-auto flex items-center gap-3">
+                  {selectedUids.size > 0 && (
+                    <button
+                      onClick={() => setBulkDeleteConfirm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 border border-red-200 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete Selected ({selectedUids.size})
+                    </button>
+                  )}
+                  <span className="text-xs text-slate-400 font-medium">{filteredUsers.length} users</span>
+                </div>
               </div>
               {loadingUsers ? (
                 <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></div>
@@ -818,6 +915,14 @@ export default function AdminDashboard() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                     <tr>
+                      <th className="px-3 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={filteredUsers.length > 0 && selectedUids.size === filteredUsers.length}
+                          onChange={toggleSelectAll}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </th>
                       <th className="px-6 py-3">User</th>
                       <th className="px-6 py-3">Cohort</th>
                       <th className="px-6 py-3">Password</th>
@@ -829,7 +934,15 @@ export default function AdminDashboard() {
                     {filteredUsers.map((u) => {
                       const status = getUserStatus(u);
                       return (
-                        <tr key={u.uid} className="hover:bg-slate-50/50 transition-colors">
+                        <tr key={u.uid} className={clsx("hover:bg-slate-50/50 transition-colors", selectedUids.has(u.uid) && "bg-indigo-50/50")}>
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedUids.has(u.uid)}
+                              onChange={() => toggleSelectUser(u.uid)}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          </td>
                           <td className="px-6 py-3">
                             <div className="flex items-center gap-2">
                               {/* Status icon */}
@@ -903,6 +1016,37 @@ export default function AdminDashboard() {
                 <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50">Cancel</button>
                 <button onClick={() => handleDelete(deleteTarget)} disabled={deleting} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
                   {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Yes, Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Delete Confirmation Modal */}
+        {bulkDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="font-bold text-slate-900 mb-2">Delete {selectedUids.size} Users?</h3>
+              <p className="text-sm text-slate-500 mb-3">This will permanently delete the following accounts:</p>
+              <div className="bg-slate-50 rounded-xl p-3 max-h-40 overflow-y-auto mb-4 border border-slate-200">
+                {users.filter(u => selectedUids.has(u.uid)).map(u => (
+                  <p key={u.uid} className="text-xs text-slate-600 py-0.5">{u.name ? `${u.name} (${u.email})` : u.email}</p>
+                ))}
+              </div>
+              {bulkDeleteProgress && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${(bulkDeleteProgress.current / bulkDeleteProgress.total) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-600">{bulkDeleteProgress.current}/{bulkDeleteProgress.total}</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setBulkDeleteConfirm(false)} disabled={bulkDeleting} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button onClick={handleBulkDelete} disabled={bulkDeleting} className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+                  {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : `Yes, Delete All (${selectedUids.size})`}
                 </button>
               </div>
             </div>

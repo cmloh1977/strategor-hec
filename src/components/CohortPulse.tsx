@@ -276,7 +276,7 @@ export default function CohortPulse({ participants, cohortName, onClose }: Cohor
             display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
             <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 600 }}>
-              GALP Strategy Coach · Powered by the Strategor Framework
+              HEC Strategy Coach · Powered by the Strategor Framework
             </span>
             <span style={{ fontSize: "9px", color: "#cbd5e1" }}>
               Generated {new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}

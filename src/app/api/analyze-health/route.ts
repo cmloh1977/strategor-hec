@@ -36,6 +36,10 @@ The JSON must follow this exact structure:
     "opportunitiesWeight": <1-10>,
     "threatsWeight": <1-10>
   },
+  "valueCurve": {
+    "differentiationScore": <1-10>,
+    "insight": "<20 words max summarizing competitive positioning from the value curve>"
+  },
   "narrative": "<2-3 sentence strategic narrative summarizing the business's strategic position, key strengths, and critical vulnerabilities>",
   "priorities": [
     { "urgency": "<high|medium|low>", "text": "<20 words max describing a strategic priority>" },
@@ -67,6 +71,7 @@ A LOW-scoring analysis:
 - Five Forces severity: 1-3=Low (favorable), 4-6=Moderate, 7-8=High, 9-10=Very High (intense pressure). Score what the EVIDENCE suggests, not what sounds impressive.
 - VRIO strength: 1=not demonstrated, 2=weak, 3=present, 4=strong with honest caveats, 5=exceptional AND the analysis explains WHY competitors cannot replicate it
 - SWOT weights: Score based on STRATEGIC SIGNIFICANCE of the points, not count. A single critical, specific threat outweighs 3 generic ones. Reward brutally honest weaknesses — they show depth of reflection.
+- Value Curve differentiation: 1-3=Undifferentiated (scores similar to competitors across most factors), 4-6=Moderately differentiated, 7-8=Clearly differentiated on key factors, 9-10=Highly unique positioning with clear blue ocean gaps. Score based on HOW DIFFERENT the scores are from competitors, not how high they are.
 - Health Score: Holistically assess the overall QUALITY OF STRATEGIC THINKING (0-100). A thoughtful analysis that identifies real vulnerabilities should score HIGHER than a polished one that hides them. 50-65 is a genuinely good, honest analysis. 70+ requires both depth AND honesty. 80+ is exceptional strategic thinking with real tension acknowledged.
 - Priorities: Focus on the 3 most impactful actions. Reward priorities that address honestly-identified weaknesses over vague aspirational goals.
 
@@ -140,6 +145,9 @@ Opportunities:
 
 Threats:
 - ${summarize(analysis.swot?.threats?.points || [])}
+
+═══ VALUE CURVE (Strategy Canvas) ═══
+${analysis.valueCurve?.factors?.length ? analysis.valueCurve.factors.map((f: any) => `${f.name}: You=${f.myScore}${analysis.valueCurve.competitors?.map((c: string) => ` ${c}=${f.competitors?.[c] || '?'}`).join('')}`).join('\n') : '(not completed)'}
 `;
 
     const response = await ai.models.generateContent({

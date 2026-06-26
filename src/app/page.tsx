@@ -57,10 +57,10 @@ export default function Home() {
               <Shield className="h-8 w-8" />
             </div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">GALP Strategy Coach</h1>
-              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v8.8-galp</span>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">HEC Strategy Coach</h1>
+              <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase">v11.0-hec</span>
             </div>
-            <p className="mt-2 text-sm text-slate-500">Master Strategic Analysis before Paris.</p>
+            <p className="mt-2 text-sm text-slate-500">Master Strategic Analysis.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -98,7 +98,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-red-600 px-4 py-3 text-sm flex-1 font-semibold text-white shadow-md transition-all hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm flex-1 font-semibold text-white shadow-md transition-all hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isLoggingIn ? (
                 <Loader2 className="h-5 w-5 animate-spin" />

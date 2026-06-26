@@ -4,9 +4,15 @@ import { adminDb } from '@/lib/firebaseAdmin';
 
 const ai = new GoogleGenAI({});
 
-// ── Level 2: Pattern Recognition Prompt ──
-const PATTERN_PROMPT = `You are a senior strategy consultant analyzing a GROUP of business divisions within Toyota Tsusho Corporation (TTC).
-You have access to each team member's complete strategic analysis data AND their deep coaching conversation history.
+// ── Level 2: Pattern Recognition Prompt (HEC / Strategor) ──
+const PATTERN_PROMPT = `You are a senior strategy consultant coaching a team of business leaders.
+Each team member has completed a strategic analysis of their own business or division using the Strategor framework:
+- Business Model (Odyssey 3.14)
+- Porter's Five Forces
+- VRIO Framework
+- SWOT Synthesis
+
+You have access to each team member's complete strategic analysis data AND their coaching conversation history.
 
 Your task: Identify cross-divisional PATTERNS that the team cannot see individually. Look for:
 1. "Exploit" Opportunities: Shared vulnerabilities, redundant resources, common problems to solve internally.
@@ -28,31 +34,29 @@ Return ONLY valid JSON (no markdown fences). Structure:
 
 Be rigorous. Look for REAL patterns, especially surprising ones found in their chat conversations, not forced connections.`;
 
-// ── Level 3: Project Theme Forge Prompt ──
-const DIMENSION_PROMPT = `You are a senior strategy consultant at Toyota Tsusho Corporation (TTC).
-You are helping a GALP team map a specific strategic tension/dilemma to TTC's Mid-Term Business Plan "4 Higher Dimensions":
+// ── Level 3: Strategic Project Forge Prompt (HEC / Strategor) ──
+const DIMENSION_PROMPT = `You are a senior strategy consultant coaching a team through corporate-level strategic synthesis using the McKinsey/GE Matrix framework.
 
-① GROWTH INVESTMENT — Elevate unique competitiveness + synergies across value domains (Core, Nature, Social)
-② CAPITAL POLICIES — Optimize capital allocation, improve ROIC, shareholder returns
-③ HUMAN CAPITAL & ORGANIZATION — Build people, culture, cross-functional collaboration, engagement
-④ SUSTAINABILITY MANAGEMENT — ESG integration, circular economy leadership, carbon neutrality
+The McKinsey/GE Matrix evaluates businesses on TWO axes:
+- INDUSTRY ATTRACTIVENESS (from 5 Forces + external environment)
+- COMPETITIVE STRENGTH (from VRIO + Business Model)
 
-The team has identified a key strategic tension (an insight from their portfolio).
-Your task: Map this tension to the 4 Higher Dimensions and generate concrete GALP Action Learning Project seeds that address it.
+The team has identified a key strategic tension (an insight from their portfolio analysis).
+Your task: Map this tension to strategic implications and generate concrete collaborative project seeds.
 
 Return ONLY valid JSON:
 
 {
   "tensionMapped": {
-    "dimensionsImpacted": ["①", "②", "③", "④"],
-    "rationale": "<2-3 sentences explaining why this specific tension impacts these dimensions>"
+    "dimensionsImpacted": ["Industry Attractiveness", "Competitive Strength"],
+    "rationale": "<2-3 sentences explaining why this tension impacts portfolio positioning>"
   },
   "projectSeeds": [
     {
-      "title": "<compelling project title address this tension>",
+      "title": "<compelling project title addressing this tension>",
       "type": "<Exploration|Exploitation>",
       "hypothesis": "<If we do X across our divisions, we can achieve Y>",
-      "higherDimensionLeap": "<how this project goes beyond basic optimization to true TTC transformation>"
+      "higherDimensionLeap": "<how this project goes beyond basic optimization to true strategic transformation>"
     }
   ],
   "coachingQuestions": [
@@ -284,7 +288,7 @@ Rules:
 
 A team is mapping their businesses on a 2×2 Strategic Portfolio Grid:
 - X-axis: Competitive Strength (VRIO + Business Model) — 0% (Weak) to 100% (Strong)
-- Y-axis: Market Dynamism (5 Forces intensity) — 0% (Stable) to 100% (Intense/High Change)
+- Y-axis: Market Environment (5 Forces) — 0% (Unfavorable/High competitive intensity) to 100% (Favorable/Low competitive intensity)
 
 The member "${targetCard.ownerName}" (${targetCard.businessName}) placed themselves at: ${selfQ}
 
@@ -391,29 +395,24 @@ Format in markdown with ### headers. Be specific — reference member names and 
       
       // Zone-specific context injection
       const zoneContextMap: Record<string, string> = {
-        core: `The team is discussing the CORE VALUE domain. This domain contains divisions focused on NEXT-GENERATION MOBILITY — automotive, metals processing, supply chain, and digital solutions. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: mobility transformation, Toyota Group synergies, supply chain resilience, semiconductor strategy, and competitive moats.`,
-        social: `The team is discussing the SOCIAL VALUE domain. This domain contains divisions focused on SOLVING SOCIAL ISSUES — circular economy, healthcare, Africa development, and community impact. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: circular economy leadership (Radius Recycling integration), Global South expansion, healthcare access, and scaling social impact businesses profitably.`,
-        nature: `The team is discussing the NATURE VALUE domain. This domain contains divisions focused on ENVIRONMENTAL SOLUTIONS — renewable energy, carbon neutrality, and energy management. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: renewable energy pioneering, carbon neutrality positioning, green infrastructure, and how to fund nature value businesses from core value cash flows.`,
+        core: `The team is discussing the CORE VALUE domain — the primary revenue-generating businesses and competitive advantages. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: competitive positioning, resource allocation, value chain optimization, and defending market position.`,
+        social: `The team is discussing the SOCIAL VALUE domain — businesses creating societal impact and addressing social challenges. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: stakeholder value, social innovation, sustainable business models, and balancing profit with purpose.`,
+        nature: `The team is discussing the NATURE VALUE domain — environmental solutions and sustainability initiatives. The divisions in this domain are: ${zoneDivisions || 'unknown'}. Focus your coaching on: environmental strategy, green innovation, circular economy, and integrating sustainability into core business operations.`,
       };
       const zoneContext = zone && zoneContextMap[zone] ? `\n\n## ZONE CONTEXT\n${zoneContextMap[zone]}\n` : '';
 
-      const constellationChatPrompt = `You are the TEAM Thinking Partner for a GALP team at Toyota Tsusho Corporation.
-You have access to ALL team members' individual analyses AND their coaching conversations.
-You're now facilitating a GROUP discussion to identify cross-divisional patterns and build toward a Group Action Learning Project.
+      const constellationChatPrompt = `You are the TEAM Thinking Partner for a strategy team.
+You have access to ALL team members' individual strategic analyses AND their coaching conversations.
+You're now facilitating a GROUP discussion to identify cross-divisional patterns and build toward a collaborative strategic project.
 ${zoneContext}
-TTC's Mid-Term Business Plan "4 Higher Dimensions":
-① Growth Investment — Core Value, Nature Value, Social Value (¥1.2T investment over 3 years, ROIC targets: Core 15%, Social 10%, Nature 5%)
-② Capital Policies — ROE 15%+, 40% payout ratio
-③ Human Capital & Organization — engagement, culture, cross-functional collaboration  
-④ Sustainability Management — ESG, circular economy, carbon neutrality
 
 Your role:
 - Be Socratic: Ask questions, don't give answers directly
-- Challenge the team to think at a "higher dimension" — transformation, not just optimization
-- Help them connect their individual challenges to TTC's strategic priorities
-- Push them toward a concrete Group Action Learning Project
+- Challenge the team to think at a higher strategic level — transformation, not just optimization
+- Help them connect their individual challenges to shared strategic priorities
+- Push them toward a concrete collaborative project
 - Reference specific findings from individual members' analyses
-- When they propose ideas, challenge: "Does this merely optimize or truly elevate to a higher dimension?"
+- When they propose ideas, challenge: "Does this merely optimize or truly transform?"
 
 ## CRITICAL: Honest Challenge Protocol
 You have FULL ACCESS to every member's analysis data AND their coaching conversations. Use this to:

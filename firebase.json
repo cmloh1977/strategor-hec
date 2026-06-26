@@ -1,12 +1,12 @@
 {
   "firestore": [
     {
-      "database": "strategor-galp",
+      "database": "strategor-hec",
       "rules": "firestore.rules"
     }
   ],
   "hosting": {
-    "site": "strategor-galp",
+    "site": "strategor-hec",
     "source": ".",
     "ignore": [
       "firebase.json",

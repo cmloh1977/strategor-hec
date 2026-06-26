@@ -151,6 +151,21 @@ Return ONLY valid JSON (no markdown fences). Structure:
           "rationale": "<why this weight — are they specific and existential, or vague and generic?>"
         }
       ]
+    },
+    "valueCurve": {
+      "sectionTitle": "Value Curve — Competitive Positioning",
+      "overviewInsight": "<2-3 sentence overview of competitive positioning revealed by the value curve>",
+      "factors": [
+        {
+          "name": "<factor name>",
+          "yourScore": <1-10>,
+          "competitorAvg": <1-10>,
+          "gap": "<positive/negative/neutral>",
+          "insight": "<one sentence on what this gap means strategically>"
+        }
+      ],
+      "blueOceanOpportunities": "<1-2 sentences on factors where you could create uncontested market space>",
+      "vulnerabilities": "<1-2 sentences on factors where competitors dominate>"
     }
   },
   "strategicPriorities": {
@@ -250,6 +265,9 @@ ${summarize(analysis.swot?.opportunities?.points || [])}
 
 Threats:
 ${summarize(analysis.swot?.threats?.points || [])}
+
+═══ VALUE CURVE (Strategy Canvas) ═══
+${analysis.valueCurve?.factors?.length ? analysis.valueCurve.factors.map((f: any) => `${f.name}: You=${f.myScore}${analysis.valueCurve.competitors?.map((c: string) => ` ${c}=${f.competitors?.[c] || '?'}`).join('')}`).join('\n') : '(not completed)'}
 
 ═══ AI HEALTH CARD SCORES ═══
 ${JSON.stringify(aiScores, null, 2)}

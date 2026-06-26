@@ -6,7 +6,7 @@ import { AuthProvider } from "@/lib/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "GALP Strategy Coach | Toyota Tsusho",
+  title: "HEC Strategy Coach",
   description: "AI-driven mastery of Strategic Analysis based on the Strategor framework.",
 };
 

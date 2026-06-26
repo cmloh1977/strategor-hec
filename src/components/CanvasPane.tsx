@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { usePortfolio, LANGUAGE_FLAGS } from "@/lib/PortfolioContext";
 import type { AppLanguage } from "@/lib/PortfolioContext";
-import type { PillarData } from "@/lib/PortfolioContext";
+import type { PillarData, ValueCurveState, ValueCurveFactor } from "@/lib/PortfolioContext";
+import InnovationDirectionsPane from "./InnovationDirectionsPane";
 
 // ── Translation Maps ──
 const TRANSLATIONS: Record<string, Record<AppLanguage, string>> = {
@@ -16,6 +17,8 @@ const TRANSLATIONS: Record<string, Record<AppLanguage, string>> = {
   "ea-desc": { en: "Analyze the competitive forces shaping your industry using Porter's 5 Forces.", ja: "ポーターの5つの力を使って、業界を形成する競争要因を分析しましょう。", fr: "Analysez les forces concurrentielles de votre industrie avec les 5 Forces de Porter.", zh: "使用波特五力模型分析塑造您行业的竞争力量。" },
   "ia-desc": { en: "Evaluate key resources and capabilities using the VRIO framework.", ja: "VRIOフレームワークを使って、主要な資源と能力を評価しましょう。", fr: "Évaluez vos ressources et capacités clés avec le framework VRIO.", zh: "使用VRIO框架评估关键资源和能力。" },
   "sw-desc": { en: "Combine your external and internal analyses into a comprehensive SWOT.", ja: "外部分析と内部分析を包括的なSWOTに統合しましょう。", fr: "Combinez vos analyses externe et interne en une synthèse SWOT complète.", zh: "将外部和内部分析合并为综合SWOT。" },
+  "inn-desc": { en: "Select 3 innovation directions to reinvent your business model.", ja: "ビジネスモデルを革新する3つの方向性を選択してください。", fr: "Sélectionnez 3 directions d'innovation pour réinventer votre modèle d'affaires.", zh: "选择3个创新方向来重塑您的商业模式。" },
+  "dd-desc": { en: "Deep dive into each of your 3 chosen innovation directions.", ja: "選択した3つのイノベーション方向性を深掘りします。", fr: "Approfondissez chacune de vos 3 directions d'innovation choisies.", zh: "深入研究您选择的3个创新方向。" },
   // Business Model segments
   "Value Proposition": { en: "Value Proposition", ja: "価値提案", fr: "Proposition de Valeur", zh: "价值主张" },
   "Who? What?": { en: "Who? What?", ja: "誰に？何を？", fr: "Qui ? Quoi ?", zh: "谁？什么？" },
@@ -76,6 +79,9 @@ const TRANSLATIONS: Record<string, Record<AppLanguage, string>> = {
   "Where do you lack resources?": { en: "Where do you lack resources?", ja: "どこにリソースが不足しているか？", fr: "Où manquez-vous de ressources ?", zh: "您在哪里缺乏资源？" },
   "What trends can you leverage?": { en: "What trends can you leverage?", ja: "活用できるトレンドは？", fr: "Quelles tendances exploiter ?", zh: "您可以利用哪些趋势？" },
   "What could harm you?": { en: "What could harm you?", ja: "何が脅威になるか？", fr: "Qu'est-ce qui pourrait vous nuire ?", zh: "什么可能伤害您？" },
+  // Value Curve
+  "Value Curve": { en: "Value Curve", ja: "バリューカーブ", fr: "Courbe de Valeur", zh: "价值曲线" },
+  "vc-desc": { en: "Map your competitive positioning against key industry factors", ja: "主要な業界要因に対する競争ポジションをマッピング", fr: "Cartographiez votre positionnement concurrentiel", zh: "绘制您的竞争定位" },
 };
 
 function t(key: string, lang: AppLanguage): string {
@@ -85,15 +91,21 @@ function t(key: string, lang: AppLanguage): string {
 const MODULE_DESCS: Record<string, string> = {
   "business-model": "bm-desc",
   "external-analysis": "ea-desc",
+  "value-curve": "vc-desc",
   "internal-analysis": "ia-desc",
   "swot-synthesis": "sw-desc",
+  "innovation-directions": "inn-desc",
+  "innovation-deepdive": "dd-desc",
 };
 
 const MODULE_TITLES: Record<string, string> = {
   "business-model": "Business Model",
   "external-analysis": "External Analysis",
+  "value-curve": "Value Curve",
   "internal-analysis": "Internal Analysis",
   "swot-synthesis": "SWOT Synthesis",
+  "innovation-directions": "Innovation Directions",
+  "innovation-deepdive": "Deep Dive",
 };
 
 // ── Translation Cache Hook ──
@@ -382,6 +394,373 @@ function SWOTPane({ lang, getTranslated, requestTranslation, isTranslating }: Tr
   );
 }
 
+// ── Value Curve ──
+const COMPETITOR_COLORS = ["#f59e0b", "#6366f1", "#10b981"];
+
+function ValueCurvePane() {
+  const { portfolio, updateValueCurve } = usePortfolio();
+  const vc = portfolio.myAnalysis?.valueCurve;
+
+  const [factors, setFactors] = useState<string[]>([]);
+  const [competitors, setCompetitors] = useState<string[]>([]);
+  const [myScores, setMyScores] = useState<Record<string, number>>({});
+  const [compScores, setCompScores] = useState<Record<string, Record<string, number>>>({});
+  const [newFactor, setNewFactor] = useState("");
+  const [newCompetitor, setNewCompetitor] = useState("");
+  const [finalized, setFinalized] = useState(false);
+
+  // Load from context on mount
+  useEffect(() => {
+    if (vc && vc.factors.length > 0) {
+      const fNames = vc.factors.map((f: ValueCurveFactor) => f.name);
+      setFactors(fNames);
+      setCompetitors(vc.competitors || []);
+      const ms: Record<string, number> = {};
+      const cs: Record<string, Record<string, number>> = {};
+      vc.factors.forEach((f: ValueCurveFactor) => {
+        ms[f.name] = f.myScore;
+        Object.entries(f.competitors).forEach(([comp, score]) => {
+          if (!cs[comp]) cs[comp] = {};
+          cs[comp][f.name] = score;
+        });
+      });
+      setMyScores(ms);
+      setCompScores(cs);
+      setFinalized(vc.populated);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync to context on every meaningful change
+  const syncToContext = useCallback((f: string[], c: string[], ms: Record<string, number>, cs: Record<string, Record<string, number>>, pop: boolean) => {
+    const vcFactors: ValueCurveFactor[] = f.map(name => ({
+      name,
+      myScore: ms[name] ?? 5,
+      competitors: Object.fromEntries(c.map(comp => [comp, cs[comp]?.[name] ?? 5])),
+    }));
+    updateValueCurve({ factors: vcFactors, competitors: c, populated: pop });
+  }, [updateValueCurve]);
+
+  const addFactor = () => {
+    const name = newFactor.trim();
+    if (!name || factors.includes(name) || factors.length >= 8) return;
+    const next = [...factors, name];
+    const nextMs = { ...myScores, [name]: 5 };
+    const nextCs = { ...compScores };
+    competitors.forEach(c => {
+      nextCs[c] = { ...(nextCs[c] || {}), [name]: 5 };
+    });
+    setFactors(next);
+    setMyScores(nextMs);
+    setCompScores(nextCs);
+    setNewFactor("");
+    syncToContext(next, competitors, nextMs, nextCs, false);
+    setFinalized(false);
+  };
+
+  const removeFactor = (name: string) => {
+    const next = factors.filter(f => f !== name);
+    const nextMs = { ...myScores };
+    delete nextMs[name];
+    const nextCs = { ...compScores };
+    Object.keys(nextCs).forEach(c => {
+      const copy = { ...nextCs[c] };
+      delete copy[name];
+      nextCs[c] = copy;
+    });
+    setFactors(next);
+    setMyScores(nextMs);
+    setCompScores(nextCs);
+    syncToContext(next, competitors, nextMs, nextCs, false);
+    setFinalized(false);
+  };
+
+  const addCompetitor = () => {
+    const name = newCompetitor.trim();
+    if (!name || competitors.includes(name) || competitors.length >= 3) return;
+    const next = [...competitors, name];
+    const nextCs = { ...compScores, [name]: Object.fromEntries(factors.map(f => [f, 5])) };
+    setCompetitors(next);
+    setCompScores(nextCs);
+    setNewCompetitor("");
+    syncToContext(factors, next, myScores, nextCs, false);
+    setFinalized(false);
+  };
+
+  const removeCompetitor = (name: string) => {
+    const next = competitors.filter(c => c !== name);
+    const nextCs = { ...compScores };
+    delete nextCs[name];
+    setCompetitors(next);
+    setCompScores(nextCs);
+    syncToContext(factors, next, myScores, nextCs, false);
+    setFinalized(false);
+  };
+
+  const setMyScore = (factor: string, value: number) => {
+    const nextMs = { ...myScores, [factor]: value };
+    setMyScores(nextMs);
+    syncToContext(factors, competitors, nextMs, compScores, false);
+    setFinalized(false);
+  };
+
+  const setCompScore = (comp: string, factor: string, value: number) => {
+    const nextCs = { ...compScores, [comp]: { ...(compScores[comp] || {}), [factor]: value } };
+    setCompScores(nextCs);
+    syncToContext(factors, competitors, myScores, nextCs, false);
+    setFinalized(false);
+  };
+
+  const canFinalize = factors.length >= 3 && competitors.length >= 1;
+
+  const handleFinalize = () => {
+    if (!canFinalize) return;
+    syncToContext(factors, competitors, myScores, compScores, true);
+    setFinalized(true);
+  };
+
+  const handleEdit = () => {
+    setFinalized(false);
+    syncToContext(factors, competitors, myScores, compScores, false);
+  };
+
+  const showScoring = factors.length > 0 && competitors.length > 0;
+  const showChart = factors.length >= 2;
+
+  // ── SVG Chart ──
+  const chartW = 600;
+  const chartH = 300;
+  const padL = 50;
+  const padR = 30;
+  const padT = 40;
+  const padB = 60;
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
+
+  const xForIdx = (i: number) => padL + (factors.length > 1 ? (i / (factors.length - 1)) * plotW : plotW / 2);
+  const yForScore = (s: number) => padT + plotH - ((s - 1) / 9) * plotH;
+
+  const buildLine = (scores: number[]) =>
+    scores.map((s, i) => `${i === 0 ? "M" : "L"}${xForIdx(i)},${yForScore(s)}`).join(" ");
+
+  return (
+    <div className="flex flex-col flex-1 pb-4 gap-5 overflow-y-auto">
+      {/* ── Finalized Badge ── */}
+      {finalized && (
+        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3">
+          <span className="text-sm font-semibold text-emerald-700">✓ Value Curve Complete</span>
+          <button onClick={handleEdit} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 px-3 py-1 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">Edit</button>
+        </div>
+      )}
+
+      {!finalized && (
+        <>
+          {/* ── Section 1: Competing Factors ── */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h3 className="text-sm font-bold text-slate-800 mb-3">Competing Factors</h3>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newFactor}
+                onChange={e => setNewFactor(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addFactor()}
+                placeholder="e.g. Price, Quality, Speed…"
+                maxLength={40}
+                className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+              />
+              <button
+                onClick={addFactor}
+                disabled={!newFactor.trim() || factors.length >= 8}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >Add</button>
+            </div>
+            <p className="text-[10px] text-slate-400 mb-2">Min 3, max 8 factors · {factors.length}/8 added</p>
+            <div className="flex flex-wrap gap-2">
+              {factors.map(f => (
+                <span key={f} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                  {f}
+                  <button onClick={() => removeFactor(f)} className="text-slate-400 hover:text-red-500 ml-0.5 text-sm leading-none">×</button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Section 2: Competitors ── */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h3 className="text-sm font-bold text-slate-800 mb-3">Competitors</h3>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newCompetitor}
+                onChange={e => setNewCompetitor(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addCompetitor()}
+                placeholder="Competitor name…"
+                maxLength={40}
+                className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+              />
+              <button
+                onClick={addCompetitor}
+                disabled={!newCompetitor.trim() || competitors.length >= 3}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >Add</button>
+            </div>
+            <p className="text-[10px] text-slate-400 mb-2">Min 1, max 3 competitors · {competitors.length}/3 added</p>
+            <div className="flex flex-wrap gap-2">
+              {competitors.map((c, i) => (
+                <span key={c} className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border" style={{ borderColor: COMPETITOR_COLORS[i], color: COMPETITOR_COLORS[i], backgroundColor: COMPETITOR_COLORS[i] + "10" }}>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COMPETITOR_COLORS[i] }} />
+                  {c}
+                  <button onClick={() => removeCompetitor(c)} className="hover:text-red-500 ml-0.5 text-sm leading-none">×</button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Section 3: Scoring ── */}
+          {showScoring && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <h3 className="text-sm font-bold text-slate-800 mb-4">Score Each Factor (1–10)</h3>
+              <div className="space-y-5">
+                {factors.map(factor => (
+                  <div key={factor} className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">{factor}</p>
+                    {/* My Business */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] font-medium text-indigo-600 w-24 truncate">My Business</span>
+                      <input
+                        type="range" min={1} max={10} value={myScores[factor] ?? 5}
+                        onChange={e => setMyScore(factor, Number(e.target.value))}
+                        className="flex-1 h-1.5 accent-indigo-500"
+                      />
+                      <span className="text-xs font-bold text-indigo-600 w-5 text-right">{myScores[factor] ?? 5}</span>
+                    </div>
+                    {/* Competitors */}
+                    {competitors.map((comp, ci) => (
+                      <div key={comp} className="flex items-center gap-3">
+                        <span className="text-[11px] font-medium w-24 truncate" style={{ color: COMPETITOR_COLORS[ci] }}>{comp}</span>
+                        <input
+                          type="range" min={1} max={10} value={compScores[comp]?.[factor] ?? 5}
+                          onChange={e => setCompScore(comp, factor, Number(e.target.value))}
+                          className="flex-1 h-1.5"
+                          style={{ accentColor: COMPETITOR_COLORS[ci] }}
+                        />
+                        <span className="text-xs font-bold w-5 text-right" style={{ color: COMPETITOR_COLORS[ci] }}>{compScores[comp]?.[factor] ?? 5}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Section 4: Live Chart ── */}
+          {showChart && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <h3 className="text-sm font-bold text-slate-800 mb-3">Value Curve Chart</h3>
+              {/* Legend */}
+              <div className="flex flex-wrap gap-4 mb-3">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                  <span className="w-3 h-0.5 rounded bg-indigo-500 inline-block" /> My Business
+                </span>
+                {competitors.map((c, i) => (
+                  <span key={c} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                    <span className="w-3 h-0.5 rounded inline-block" style={{ backgroundColor: COMPETITOR_COLORS[i] }} /> {c}
+                  </span>
+                ))}
+              </div>
+              <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ maxHeight: 340 }}>
+                {/* Grid lines */}
+                {[1,2,3,4,5,6,7,8,9,10].map(v => (
+                  <g key={v}>
+                    <line x1={padL} x2={padL + plotW} y1={yForScore(v)} y2={yForScore(v)} stroke="#e2e8f0" strokeWidth={1} />
+                    <text x={padL - 8} y={yForScore(v) + 4} textAnchor="end" className="text-[10px]" fill="#94a3b8">{v}</text>
+                  </g>
+                ))}
+                {/* My Business line */}
+                <path d={buildLine(factors.map(f => myScores[f] ?? 5))} fill="none" stroke="#6366f1" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+                {factors.map((f, i) => (
+                  <circle key={f} cx={xForIdx(i)} cy={yForScore(myScores[f] ?? 5)} r={5} fill="#6366f1" stroke="#fff" strokeWidth={2} />
+                ))}
+                {/* Competitor lines */}
+                {competitors.map((comp, ci) => (
+                  <g key={comp}>
+                    <path d={buildLine(factors.map(f => compScores[comp]?.[f] ?? 5))} fill="none" stroke={COMPETITOR_COLORS[ci]} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3" />
+                    {factors.map((f, i) => (
+                      <circle key={f} cx={xForIdx(i)} cy={yForScore(compScores[comp]?.[f] ?? 5)} r={4} fill={COMPETITOR_COLORS[ci]} stroke="#fff" strokeWidth={2} />
+                    ))}
+                  </g>
+                ))}
+                {/* X-axis labels */}
+                {factors.map((f, i) => (
+                  <text key={f} x={xForIdx(i)} y={chartH - 10} textAnchor="middle" className="text-[10px]" fill="#64748b" fontWeight={500}>
+                    {f.length > 12 ? f.slice(0, 11) + "…" : f}
+                  </text>
+                ))}
+              </svg>
+            </div>
+          )}
+
+          {/* ── Section 5: Finalize ── */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleFinalize}
+              disabled={!canFinalize}
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              Finalize Value Curve ✓
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Show chart even when finalized */}
+      {finalized && showChart && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <h3 className="text-sm font-bold text-slate-800 mb-3">Value Curve Chart</h3>
+          <div className="flex flex-wrap gap-4 mb-3">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+              <span className="w-3 h-0.5 rounded bg-indigo-500 inline-block" /> My Business
+            </span>
+            {competitors.map((c, i) => (
+              <span key={c} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                <span className="w-3 h-0.5 rounded inline-block" style={{ backgroundColor: COMPETITOR_COLORS[i] }} /> {c}
+              </span>
+            ))}
+          </div>
+          <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ maxHeight: 340 }}>
+            {[1,2,3,4,5,6,7,8,9,10].map(v => (
+              <g key={v}>
+                <line x1={padL} x2={padL + plotW} y1={yForScore(v)} y2={yForScore(v)} stroke="#e2e8f0" strokeWidth={1} />
+                <text x={padL - 8} y={yForScore(v) + 4} textAnchor="end" className="text-[10px]" fill="#94a3b8">{v}</text>
+              </g>
+            ))}
+            <path d={buildLine(factors.map(f => myScores[f] ?? 5))} fill="none" stroke="#6366f1" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+            {factors.map((f, i) => (
+              <circle key={f} cx={xForIdx(i)} cy={yForScore(myScores[f] ?? 5)} r={5} fill="#6366f1" stroke="#fff" strokeWidth={2} />
+            ))}
+            {competitors.map((comp, ci) => (
+              <g key={comp}>
+                <path d={buildLine(factors.map(f => compScores[comp]?.[f] ?? 5))} fill="none" stroke={COMPETITOR_COLORS[ci]} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3" />
+                {factors.map((f, i) => (
+                  <circle key={f} cx={xForIdx(i)} cy={yForScore(compScores[comp]?.[f] ?? 5)} r={4} fill={COMPETITOR_COLORS[ci]} stroke="#fff" strokeWidth={2} />
+                ))}
+              </g>
+            ))}
+            {factors.map((f, i) => (
+              <text key={f} x={xForIdx(i)} y={chartH - 10} textAnchor="middle" className="text-[10px]" fill="#64748b" fontWeight={500}>
+                {f.length > 12 ? f.slice(0, 11) + "…" : f}
+              </text>
+            ))}
+          </svg>
+        </div>
+      )}
+
+      <div className="mt-auto pt-2">
+        <p className="text-[10px] text-slate-400 italic">Strategy Canvas — W. Chan Kim & Renée Mauborgne</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Export ──
 export default function CanvasPane({ moduleId }: { moduleId: string }) {
   const { portfolio, setDiagramLanguage } = usePortfolio();
@@ -397,8 +776,11 @@ export default function CanvasPane({ moduleId }: { moduleId: string }) {
     switch (moduleId) {
       case "business-model": return <BusinessModelDiagram {...translationProps} />;
       case "external-analysis": return <FiveForcesPane {...translationProps} />;
+      case "value-curve": return <ValueCurvePane />;
       case "internal-analysis": return <VRIOPane {...translationProps} />;
       case "swot-synthesis": return <SWOTPane {...translationProps} />;
+      case "innovation-directions": return <InnovationDirectionsPane lang={diagramLang} level="select" />;
+      case "innovation-deepdive": return <InnovationDirectionsPane lang={diagramLang} level="deepdive" />;
       default: return <BusinessModelDiagram {...translationProps} />;
     }
   };

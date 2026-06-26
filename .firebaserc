@@ -5,8 +5,8 @@
   "targets": {
     "ttc-dna": {
       "database": {
-        "strategor-galp": [
-          "strategor-galp"
+        "strategor-hec": [
+          "strategor-hec"
         ]
       }
     }

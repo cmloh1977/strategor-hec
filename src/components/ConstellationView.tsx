@@ -198,7 +198,7 @@ export default function ConstellationView({ onBack }: ConstellationViewProps) {
                   ? <Level2Patterns data={patterns} cards={cards} onSelectTension={(t) => { setSelectedTension(t); clearDimensions(); setActiveLevel(3); }} zoneChatMessages={team?.zoneChatMessages} addZoneChatMessage={addZoneChatMessage} savedClusters={team?.swotClusters} savedTranslations={team?.swotTranslations} saveSwotAnalysis={saveSwotAnalysis} />
                   : null
           )}
-          {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to TTC's 4 Higher Dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
+          {activeLevel === 3 && (loadingDimensions ? <LoadingSkeleton label="Mapping to strategic dimensions..." /> : dimensions ? <Level3Strategy data={dimensions} /> : null)}
         </div>
 
         {/* Chat Panel (only for Level 3) */}
@@ -293,23 +293,23 @@ function computeAIPosition(card: HealthCard): { x: number; y: number } {
     const bmNorm = (bmTotal / 15) * 100;
     strengthScore = (vrioNorm * 0.6) + (bmNorm * 0.4);
     const forcesTotal = ai.fiveForces.newEntrants.severity + ai.fiveForces.suppliers.severity + ai.fiveForces.rivalry.severity + ai.fiveForces.buyers.severity + ai.fiveForces.substitutes.severity;
-    dynamismScore = (forcesTotal / 50) * 100;
+    dynamismScore = 100 - (forcesTotal / 50) * 100; // Invert: high = favorable (low intensity), low = unfavorable (high intensity)
   } else {
     const vrioMet = [card.vrio.valuable.populated, card.vrio.rare.populated, card.vrio.inimitable.populated, card.vrio.organized.populated].filter(Boolean).length;
     const bmPoints = card.businessModel.valueProposition.points.length + card.businessModel.valueArchitecture.points.length + card.businessModel.contributions.points.length;
     const fiveTotal = card.fiveForces.newEntrants.points.length + card.fiveForces.suppliers.points.length + card.fiveForces.rivalry.points.length + card.fiveForces.buyers.points.length + card.fiveForces.substitutes.points.length;
     strengthScore = (vrioMet / 4) * 60 + Math.min(bmPoints / 10, 1) * 40;
-    dynamismScore = Math.min(fiveTotal / 25, 1) * 100;
+    dynamismScore = 100 - Math.min(fiveTotal / 25, 1) * 100; // Invert: high = favorable, low = unfavorable
   }
 
   return { x: Math.max(5, Math.min(95, strengthScore)), y: Math.max(5, Math.min(95, dynamismScore)) };
 }
 
 function getQuadrantLabel(x: number, y: number): string {
-  if (x >= 50 && y >= 50) return "Growth";
-  if (x >= 50 && y < 50) return "Core";
-  if (x < 50 && y >= 50) return "Restructuring";
-  return "Nurturing";
+  if (x >= 50 && y >= 50) return "Growth";      // Strong + Favorable = Growth Business
+  if (x >= 50 && y < 50) return "Core";          // Strong + Unfavorable = Core Business
+  if (x < 50 && y >= 50) return "Nurturing";     // Weak + Favorable = Nurturing
+  return "Restructuring";                         // Weak + Unfavorable = Restructuring
 }
 
 // ═══════════════════════════════════════
@@ -574,9 +574,9 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             {/* Y-axis label */}
             <div className="absolute -left-1 top-0 bottom-0 flex items-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2" style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}>
-                <span className="font-normal opacity-60">STABLE</span>
-                <span>← Market Dynamism (5 Forces) →</span>
-                <span className="font-normal opacity-60">INTENSE</span>
+                <span className="font-normal opacity-60">UNFAVORABLE</span>
+                <span>← Market Environment (5 Forces) →</span>
+                <span className="font-normal opacity-60">FAVORABLE</span>
               </span>
             </div>
 
@@ -593,17 +593,17 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             <div ref={gridRef} className="absolute left-8 top-0 right-0 bottom-6 border-l-2 border-b-2 border-slate-200">
               {/* Quadrant backgrounds */}
               <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-                <div className="bg-amber-50/60 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
-                  <span className="text-[10px] font-bold text-amber-600/80">⚠️ Restructuring</span>
-                  <span className="text-[8px] text-amber-500/70 mt-0.5">Reevaluate &amp; reallocate</span>
+                <div className="bg-emerald-50/40 border-r border-b border-dashed border-slate-200 p-3 flex flex-col">
+                  <span className="text-[10px] font-bold text-emerald-600/80">🌱 Nurturing</span>
+                  <span className="text-[8px] text-emerald-500/70 mt-0.5">Build for the future</span>
                 </div>
                 <div className="bg-blue-50/60 border-b border-dashed border-slate-200 p-3 flex flex-col items-end">
                   <span className="text-[10px] font-bold text-blue-600/80">🚀 Growth Business</span>
                   <span className="text-[8px] text-blue-500/70 mt-0.5">Accelerate &amp; expand</span>
                 </div>
-                <div className="bg-emerald-50/40 border-r border-dashed border-slate-200 p-3 flex flex-col justify-end">
-                  <span className="text-[8px] text-emerald-500/70 mb-0.5">Build for the future</span>
-                  <span className="text-[10px] font-bold text-emerald-600/80">🌱 Nurturing</span>
+                <div className="bg-amber-50/60 border-r border-dashed border-slate-200 p-3 flex flex-col justify-end">
+                  <span className="text-[8px] text-amber-500/70 mb-0.5">Reevaluate &amp; reallocate</span>
+                  <span className="text-[10px] font-bold text-amber-600/80">⚠️ Restructuring</span>
                 </div>
                 <div className="bg-slate-50/60 p-3 flex flex-col items-end justify-end">
                   <span className="text-[8px] text-slate-400 mb-0.5">Improve efficiency</span>
@@ -818,15 +818,16 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                     {/* Size slider during adjustment */}
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-semibold text-slate-600">📏 Growth Potential</label>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {localBubbleSize <= 2 ? "Niche" : localBubbleSize <= 4 ? "Emerging" : localBubbleSize <= 6 ? "Established" : localBubbleSize <= 8 ? "Major" : "Dominant"}
-                      </span>
                     </div>
                     <input
                       type="range" min={1} max={10} value={localBubbleSize}
                       onChange={(e) => setLocalBubbleSize(Number(e.target.value))}
                       className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                     />
+                    <div className="flex justify-between text-[8px] text-slate-300 px-0.5">
+                      <span>Low</span>
+                      <span>High</span>
+                    </div>
                     <p className="text-[9px] text-amber-600 font-medium">↕ Drag your bubble to reposition, adjust size above</p>
                     <div className="flex gap-2">
                       <button
@@ -882,7 +883,7 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
               Your Placement
             </h4>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              Drag your icon on the grid. Think about where your business honestly sits in terms of <strong>competitive strength</strong> and <strong>market dynamism</strong>.
+              Drag your icon on the grid. Think about where your business honestly sits in terms of <strong>competitive strength</strong> and <strong>market environment</strong>.
             </p>
             {activeDragPos && (
               <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2">
@@ -893,9 +894,6 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-semibold text-slate-600">📏 Growth Potential</label>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {localBubbleSize <= 2 ? "Niche" : localBubbleSize <= 4 ? "Emerging" : localBubbleSize <= 6 ? "Established" : localBubbleSize <= 8 ? "Major" : "Dominant"}
-                </span>
               </div>
               <input
                 type="range"
@@ -907,8 +905,8 @@ function CollaborativeGrid({ cards }: { cards: HealthCard[] }) {
                 className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <div className="flex justify-between text-[8px] text-slate-300 px-0.5">
-                <span>Niche</span>
-                <span>Dominant</span>
+                <span>Low</span>
+                <span>High</span>
               </div>
             </div>
             <textarea
@@ -1881,17 +1879,15 @@ function Level2Patterns({ data, cards, onSelectTension, zoneChatMessages, addZon
 
 function Level3Strategy({ data }: { data: DimensionData }) {
   const dimLabels: Record<string, { label: string; color: string; bg: string }> = {
-    "①": { label: "Growth Investment", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
-    "②": { label: "Capital Policies", color: "text-purple-700", bg: "bg-purple-50 border-purple-200" },
-    "③": { label: "Human Capital", color: "text-amber-700", bg: "bg-amber-50 border-amber-200" },
-    "④": { label: "Sustainability", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+    "Industry Attractiveness": { label: "Industry Attractiveness", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
+    "Competitive Strength": { label: "Competitive Strength", color: "text-purple-700", bg: "bg-purple-50 border-purple-200" },
   };
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto pb-20">
       <div className="text-center">
         <h3 className="text-2xl font-bold text-slate-800 mb-2">Project Theme Forge</h3>
-        <p className="text-slate-500">Mapping the selected tension to TTC&apos;s 4 Higher Dimensions to discover a GALP Action Learning Project.</p>
+        <p className="text-slate-500">Mapping the selected tension to strategic dimensions to discover a collaborative project.</p>
       </div>
 
       {/* Tension Mapped */}
