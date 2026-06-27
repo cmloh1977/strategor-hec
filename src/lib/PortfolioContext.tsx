@@ -291,6 +291,7 @@ interface PortfolioContextType {
   updateInnovationSelections: (selections: InnovationDirection[]) => void;
   confirmInnovationSelections: () => void;
   populateInnovationDeepDive: (directionId: number, deepDive: Omit<InnovationDeepDive, 'populated'>) => void;
+  resetInnovationDirections: () => void;
   myAnalysisComplete: boolean;
   myAnalysisProgress: { done: number; total: number; percent: number };
 
@@ -499,6 +500,33 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const resetInnovationDirections = () => {
+    update((p) => {
+      if (!p.myAnalysis) return p;
+      return {
+        ...p,
+        myAnalysis: {
+          ...p.myAnalysis,
+          innovationDirections: INIT_INNOVATION,
+        },
+      };
+    });
+    // Delete innovation chat docs from Firestore
+    if (user) {
+      const chatIds = ["innovation-directions", "innovation-deepdive"];
+      // Also delete per-direction deep dive chats
+      const confirmed = portfolio.myAnalysis?.innovationDirections?.selectedDirections || [];
+      confirmed.forEach((d) => chatIds.push(`innovation-deepdive-${d.id}`));
+      chatIds.forEach(async (chatId) => {
+        try {
+          const { deleteDoc, doc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          await deleteDoc(doc(db, "users", user.uid, "chats", chatId));
+        } catch (e) { /* ignore */ }
+      });
+    }
+  };
+
   // ── Actions: Share Code ──
   const generateShareCode = async (forceUpdate?: boolean): Promise<string | null> => {
     if (!user || !portfolio.myAnalysis || !computeIsComplete(portfolio.myAnalysis)) return null;
@@ -646,6 +674,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         updateInnovationSelections,
         confirmInnovationSelections,
         populateInnovationDeepDive,
+        resetInnovationDirections,
         myAnalysisComplete,
         myAnalysisProgress,
         generateShareCode,

@@ -14,6 +14,7 @@ import {
   Target,
   Rocket,
   ArrowRight,
+  RotateCcw,
 } from "lucide-react";
 
 // ── The 14 Directions ──
@@ -215,18 +216,68 @@ function PillarSection({
   );
 }
 
-// ── Deep Dive Tab ──
+// ── Deep Dive Tab (Editable) ──
 function DeepDiveTab({
   direction,
   deepDive,
+  onSave,
 }: {
   direction: DirectionEntry;
   deepDive: InnovationDeepDive | undefined;
+  onSave: (fields: Omit<InnovationDeepDive, "populated">) => void;
 }) {
-  const populated = deepDive?.populated ?? false;
+  const [localFields, setLocalFields] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    DEEP_DIVE_FIELDS.forEach((f) => {
+      init[f.key] = (deepDive?.[f.key] as string) || "";
+    });
+    return init;
+  });
+
+  // Sync from external deepDive changes
+  useEffect(() => {
+    const updated: Record<string, string> = {};
+    DEEP_DIVE_FIELDS.forEach((f) => {
+      updated[f.key] = (deepDive?.[f.key] as string) || "";
+    });
+    setLocalFields(updated);
+  }, [deepDive]);
+
+  // Auto-save debounce
+  useEffect(() => {
+    const hasContent = Object.values(localFields).some((v) => v.trim().length > 0);
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      onSave({
+        idea: localFields.idea || "",
+        newValueProposition: localFields.newValueProposition || "",
+        newValueArchitecture: localFields.newValueArchitecture || "",
+        expectedContributions: localFields.expectedContributions || "",
+        keyBarriers: localFields.keyBarriers || "",
+        firstStep: localFields.firstStep || "",
+      });
+    }, 1500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localFields]);
+
   const filledCount = DEEP_DIVE_FIELDS.filter(
-    (f) => deepDive && deepDive[f.key] && (deepDive[f.key] as string).length > 0
+    (f) => (localFields[f.key] || "").trim().length > 0
   ).length;
+
+  const handleAskAI = (fieldKey: string, fieldLabel: string) => {
+    // Dispatch a message to chat asking AI to help with this field
+    window.dispatchEvent(
+      new CustomEvent("innovation-askai", {
+        detail: {
+          directionId: direction.id,
+          directionName: direction.name,
+          fieldKey,
+          fieldLabel,
+        },
+      })
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -242,11 +293,11 @@ function DeepDiveTab({
         </div>
       </div>
 
-      {/* Fields */}
+      {/* Editable Fields */}
       <div className="space-y-3">
         {DEEP_DIVE_FIELDS.map((field) => {
-          const value = deepDive?.[field.key] as string | undefined;
-          const hasContent = value && value.length > 0;
+          const value = localFields[field.key] || "";
+          const hasContent = value.trim().length > 0;
 
           return (
             <div
@@ -266,24 +317,31 @@ function DeepDiveTab({
                   {field.icon}
                 </span>
                 <h4 className={clsx(
-                  "text-sm font-semibold",
+                  "text-sm font-semibold flex-1",
                   hasContent ? "text-emerald-800" : "text-slate-600"
                 )}>
                   {field.label}
                 </h4>
                 {hasContent && (
-                  <Check className="w-4 h-4 text-emerald-500 ml-auto" />
+                  <Check className="w-4 h-4 text-emerald-500" />
                 )}
+                <button
+                  type="button"
+                  onClick={() => handleAskAI(field.key, field.label)}
+                  className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors"
+                >
+                  Ask AI ✨
+                </button>
               </div>
-              {hasContent ? (
-                <p className="text-sm text-slate-700 leading-relaxed pl-9">
-                  {value}
-                </p>
-              ) : (
-                <p className="text-xs text-slate-400 italic pl-9">
-                  {field.placeholder}
-                </p>
-              )}
+              <textarea
+                value={value}
+                onChange={(e) =>
+                  setLocalFields((prev) => ({ ...prev, [field.key]: e.target.value }))
+                }
+                placeholder={field.placeholder}
+                rows={3}
+                className="w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700 placeholder:text-slate-400 placeholder:text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-none transition-colors"
+              />
             </div>
           );
         })}
@@ -313,6 +371,8 @@ export default function InnovationDirectionsPane({ lang, level }: InnovationDire
     portfolio,
     updateInnovationSelections,
     confirmInnovationSelections,
+    populateInnovationDeepDive,
+    resetInnovationDirections,
   } = usePortfolio();
 
   const innovationState = portfolio.myAnalysis?.innovationDirections;
@@ -366,6 +426,19 @@ export default function InnovationDirectionsPane({ lang, level }: InnovationDire
       .map((s) => DIRECTIONS.find((d) => d.id === s.id))
       .filter(Boolean) as DirectionEntry[];
   }, [confirmed, savedSelectionsKey]);
+
+  // Dispatch direction-changed event when confirmedDirections changes
+  useEffect(() => {
+    if (confirmedDirections.length > 0 && level === "deepdive") {
+      const dir = confirmedDirections[activeDeepDiveIdx] || confirmedDirections[0];
+      window.dispatchEvent(
+        new CustomEvent("direction-changed", {
+          detail: { directionId: dir.id, directionName: dir.name },
+        })
+      );
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmedDirections.length, level]);
 
   const deepDiveProgress = useMemo(() => {
     if (confirmedDirections.length === 0) return { done: 0, total: 0 };
@@ -482,10 +555,24 @@ export default function InnovationDirectionsPane({ lang, level }: InnovationDire
               </span>
             </div>
             {confirmed && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                <Lock className="w-3 h-3" />
-                Locked
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                  <Lock className="w-3 h-3" />
+                  Locked
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("This will reset all your innovation selections and deep dive progress. Continue?")) {
+                      resetInnovationDirections();
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-full border border-red-200 transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Redo
+                </button>
+              </div>
             )}
           </div>
 
@@ -612,47 +699,60 @@ export default function InnovationDirectionsPane({ lang, level }: InnovationDire
             </div>
           </div>
 
-          {/* Tab bar for confirmed directions */}
+          {/* Vertical Direction Cards + Active tab content */}
           {confirmedDirections.length > 0 && (
             <>
-              <div className="flex gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
-                {confirmedDirections.map((dir, idx) => {
-                  const dd = deepDives[dir.id];
-                  const isActive = idx === activeDeepDiveIdx;
-                  const isPopulated = dd?.populated ?? false;
+              <div className="flex gap-4 flex-1 min-h-0">
+                {/* Vertical direction card list */}
+                <div className="flex flex-col gap-2 w-48 flex-shrink-0 overflow-y-auto">
+                  {confirmedDirections.map((dir, idx) => {
+                    const dd = deepDives[dir.id];
+                    const isActive = idx === activeDeepDiveIdx;
+                    const isPopulated = dd?.populated ?? false;
 
-                  return (
-                    <button
-                      key={dir.id}
-                      type="button"
-                      onClick={() => setActiveDeepDiveIdx(idx)}
-                      className={clsx(
-                        "flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 border",
-                        isActive
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200"
-                          : isPopulated
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
-                      )}
-                    >
-                      <span className="text-base">{dir.icon}</span>
-                      <span className="max-w-[140px] truncate">{dir.name}</span>
-                      {isPopulated && !isActive && (
-                        <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                    return (
+                      <button
+                        key={dir.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveDeepDiveIdx(idx);
+                          window.dispatchEvent(
+                            new CustomEvent("direction-changed", {
+                              detail: { directionId: dir.id, directionName: dir.name },
+                            })
+                          );
+                        }}
+                        className={clsx(
+                          "flex flex-col items-start gap-1 px-3 py-3 rounded-xl text-xs font-semibold transition-all duration-200 border text-left",
+                          isActive
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200"
+                            : isPopulated
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="text-base">{dir.icon}</span>
+                          <span className="truncate flex-1">{dir.name}</span>
+                          {isPopulated && !isActive && (
+                            <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
 
-              {/* Active tab content */}
-              <div className="flex-1">
-                {confirmedDirections[activeDeepDiveIdx] && (
-                  <DeepDiveTab
-                    direction={confirmedDirections[activeDeepDiveIdx]}
-                    deepDive={deepDives[confirmedDirections[activeDeepDiveIdx].id]}
-                  />
-                )}
+                {/* Active tab content */}
+                <div className="flex-1 overflow-y-auto">
+                  {confirmedDirections[activeDeepDiveIdx] && (
+                    <DeepDiveTab
+                      direction={confirmedDirections[activeDeepDiveIdx]}
+                      deepDive={deepDives[confirmedDirections[activeDeepDiveIdx].id]}
+                      onSave={(fields) => populateInnovationDeepDive(confirmedDirections[activeDeepDiveIdx].id, fields)}
+                    />
+                  )}
+                </div>
               </div>
             </>
           )}

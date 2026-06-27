@@ -175,7 +175,30 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
 
   const chatLang = portfolio.myAnalysis?.chatLanguage || "en";
 
-  const chatDocId = moduleId;
+  const [activeDirectionId, setActiveDirectionId] = useState<number | null>(null);
+  const [activeDirectionName, setActiveDirectionName] = useState<string>("");
+
+  useEffect(() => {
+    if (moduleId !== "innovation-deepdive") return;
+    const handleDirectionChanged = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.directionId) {
+        setActiveDirectionId(detail.directionId);
+        setActiveDirectionName(detail.directionName || "");
+      }
+    };
+    window.addEventListener("direction-changed", handleDirectionChanged);
+    const confirmed = portfolio.myAnalysis?.innovationDirections?.selectedDirections;
+    if (confirmed && confirmed.length > 0 && !activeDirectionId) {
+      setActiveDirectionId(confirmed[0].id);
+      setActiveDirectionName(confirmed[0].name);
+    }
+    return () => window.removeEventListener("direction-changed", handleDirectionChanged);
+  }, [moduleId, portfolio.myAnalysis?.innovationDirections?.selectedDirections, activeDirectionId]);
+
+  const chatDocId = moduleId === "innovation-deepdive" && activeDirectionId
+    ? `innovation-deepdive-${activeDirectionId}`
+    : moduleId;
 
   const [messages, setMessages] = useState<Message[]>([
     { id: "1", role: "coach", text: getGreeting(moduleId, bizName, chatLang) }
@@ -186,18 +209,17 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
   const [transitioning, setTransitioning] = useState<{ nextStep: string; nextStepName: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Reset chat state when switching modules (moduleId changes)
-  const prevModuleRef = useRef(moduleId);
+  // Reset chat state when switching modules or directions
+  const prevChatDocRef = useRef(chatDocId);
   useEffect(() => {
-    if (prevModuleRef.current !== moduleId) {
-      prevModuleRef.current = moduleId;
-      // Reset to greeting — Firestore listener below will overwrite if saved history exists
-      setMessages([{ id: "1", role: "coach", text: getGreeting(moduleId, bizName, chatLang) }]);
-      setPendingPopulates([]);
-      setTransitioning(null);
-      setInput("");
+    if (prevChatDocRef.current !== chatDocId) {
+      const greetingText = moduleId === "innovation-deepdive" && activeDirectionName
+        ? `Let's deep dive into **${activeDirectionName}** for ${bizName}. I'll help you develop this direction with McKinsey-level strategic depth. What aspect would you like to explore first?`
+        : getGreeting(moduleId, bizName, chatLang);
+      setMessages([{ id: "1", role: "coach", text: greetingText }]);
+      prevChatDocRef.current = chatDocId;
     }
-  }, [moduleId, bizName, chatLang]);
+  }, [chatDocId, moduleId, activeDirectionName, bizName, chatLang]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -215,42 +237,7 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
     return () => unsub();
   }, [user, chatDocId]);
 
-  // Listen for innovation-challenge event (user submitted selections for AI challenge)
-  useEffect(() => {
-    if (moduleId !== "innovation-directions") return;
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.selections) return;
-      const selectionsSummary = detail.selections
-        .map((s: any) => `**${s.name}** (${s.pillar}): ${s.justification}`)
-        .join("\n\n");
-      const challengePrompt = `I've selected my 3 innovation directions. Please challenge my reasoning:\n\n${selectionsSummary}`;
-      sendMessage(challengePrompt);
-    };
-    window.addEventListener("innovation-challenge", handler);
-    return () => window.removeEventListener("innovation-challenge", handler);
-  }, [moduleId]);
 
-  // Listen for innovation-confirmed event (user confirmed final 3 directions)
-  useEffect(() => {
-    if (moduleId !== "innovation-directions") return;
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      const dirNames = detail?.directions?.join(", ") || "your 3 directions";
-      const confirmMsg: Message = {
-        id: Date.now().toString(),
-        role: "coach",
-        text: `🎉 **Your 3 innovation directions are now locked in!**\n\nYou've confirmed: ${dirNames}.\n\nNow it's time to go deeper. Head over to the **🔍 Deep Dive** section in the sidebar to explore each direction with McKinsey-level strategic analysis. I'll guide you through each one, asking the tough questions to validate your ideas and sharpen your implementation plan.\n\n**→ Click "Deep Dive" in the Innovation Lab sidebar to continue.**`,
-      };
-      setMessages((prev) => {
-        const updated = [...prev, confirmMsg];
-        saveToFirestore(updated);
-        return updated;
-      });
-    };
-    window.addEventListener("innovation-confirmed", handler);
-    return () => window.removeEventListener("innovation-confirmed", handler);
-  }, [moduleId]);
 
   const saveToFirestore = async (newMessages: Message[]) => {
     if (!user) return;
@@ -278,6 +265,28 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
         innovationDirections: portfolio.myAnalysis.innovationDirections,
       } : {};
 
+      let otherDirectionContext = "";
+      if (moduleId === "innovation-deepdive" && activeDirectionId && user) {
+        const confirmed = portfolio.myAnalysis?.innovationDirections?.selectedDirections || [];
+        const otherDirIds = confirmed.filter(d => d.id !== activeDirectionId);
+        const otherChats: string[] = [];
+        for (const dir of otherDirIds) {
+          try {
+            const { getDoc } = await import("firebase/firestore");
+            const chatSnap = await getDoc(doc(db, "users", user.uid, "chats", `innovation-deepdive-${dir.id}`));
+            if (chatSnap.exists()) {
+              const chatData = chatSnap.data();
+              const msgs = (chatData.messages || []).slice(-6);
+              if (msgs.length > 0) {
+                const summary = msgs.map((m: any) => `${m.role === 'coach' ? 'AI' : 'User'}: ${m.text.substring(0, 200)}`).join('\n');
+                otherChats.push(`--- Direction: ${dir.name} (${dir.pillar}) ---\n${summary}`);
+              }
+            }
+          } catch (e) { /* ignore */ }
+        }
+        if (otherChats.length > 0) otherDirectionContext = otherChats.join('\n\n');
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,6 +297,8 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
           businessName: bizName,
           chatLanguage: portfolio.myAnalysis?.chatLanguage || "en",
           difficultyLevel: portfolio.myAnalysis?.difficultyLevel || "masters",
+          otherDirectionContext,
+          activeDirectionName,
         }),
       });
 
@@ -309,6 +320,35 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
       setIsTyping(false);
     }
   };
+
+  const sendMessageRef = useRef<typeof sendMessage>(sendMessage);
+  sendMessageRef.current = sendMessage;
+
+  useEffect(() => {
+    const handleInnovationChallenge = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.selections && Array.isArray(detail.selections)) {
+        const selectionsText = detail.selections.map((s: any, i: number) =>
+          `${i + 1}. **${s.name}** (${s.pillar})\n   Justification: ${s.justification}`
+        ).join('\n\n');
+        const challengeMsg = `I've selected my 3 innovation directions. Please challenge my choices:\n\n${selectionsText}`;
+        sendMessageRef.current(challengeMsg);
+      }
+    };
+    const handleInnovationConfirmed = () => {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'coach' as const,
+        text: '🎯 Excellent! Your 3 innovation directions are confirmed. Navigate to **Deep Dive** in the sidebar to develop each direction with strategic depth.'
+      }]);
+    };
+    window.addEventListener('innovation-challenge', handleInnovationChallenge);
+    window.addEventListener('innovation-confirmed', handleInnovationConfirmed);
+    return () => {
+      window.removeEventListener('innovation-challenge', handleInnovationChallenge);
+      window.removeEventListener('innovation-confirmed', handleInnovationConfirmed);
+    };
+  }, []);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();

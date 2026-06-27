@@ -303,7 +303,7 @@ Rules:
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { messages, moduleId, diagramState, businessName, chatLanguage, difficultyLevel } = body;
+    const { messages, moduleId, diagramState, businessName, chatLanguage, difficultyLevel, otherDirectionContext, activeDirectionName } = body;
 
     if (!messages || !Array.isArray(messages)) {
         return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
@@ -413,6 +413,18 @@ export async function POST(req: Request) {
     const businessHint = businessName ? `\nThe user is currently analyzing a sub-business called: "${businessName}". Refer to it by name when coaching.` : "";
     const activeModuleHint = `\n\n## ACTIVE MODULE\nThe user is currently in the "${moduleId || 'business-model'}" module.${businessHint} Apply ONLY the coaching behavior for this specific module as described above. Do NOT jump ahead to other modules.\n\nCRITICAL: The valid segment names for the current module are exactly: ${validPillars}. YOU MUST USE ONE OF THESE EXACT STRINGS FOR THE [POPULATE:xyz] command.`;
 
+    // Direction-specific hint for deep dive
+    let directionHint = "";
+    if (moduleId === "innovation-deepdive" && activeDirectionName) {
+      directionHint = `\n\n## ACTIVE DIRECTION\nThe user is currently deep-diving into the direction: "${activeDirectionName}". Focus your coaching on this specific direction. Help them develop concrete, actionable ideas for this direction.`;
+    }
+
+    // Cross-direction context
+    let crossDirectionHint = "";
+    if (otherDirectionContext && otherDirectionContext.trim().length > 0) {
+      crossDirectionHint = `\n\n## CROSS-DIRECTION CONTEXT\nThe user has been working on other innovation directions as well. Here is a summary of recent conversations for other directions. Use this to identify synergies, avoid contradictions, and maintain coherence across their innovation portfolio:\n\n${otherDirectionContext}`;
+    }
+
     // Language & Difficulty hints
     const LANG_NAMES: Record<string, string> = { en: "English", ja: "Japanese (日本語)", fr: "French (Français)", zh: "Chinese (中文)" };
     const DIFF_DESCS: Record<string, string> = {
@@ -429,7 +441,7 @@ export async function POST(req: Request) {
       model: 'gemini-3-flash-preview',
       contents: formattedHistory,
       config: {
-        systemInstruction: BASE_SYSTEM_PROMPT + priorContext + activeModuleHint + langHint,
+        systemInstruction: BASE_SYSTEM_PROMPT + priorContext + activeModuleHint + directionHint + crossDirectionHint + langHint,
         temperature: 0.7,
       }
     });
