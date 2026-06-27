@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, CheckCircle2, ArrowRight } from "lucide-react";
+import { Send, Bot, User, CheckCircle2, ArrowRight, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
 import { usePortfolio } from "@/lib/PortfolioContext";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
@@ -439,10 +439,31 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
         <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white mr-4 shadow-md">
           <Bot className="h-5 w-5" />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-lg font-bold text-slate-800 tracking-tight">Thinking Partner</h2>
           <p className="text-xs text-slate-500">{bizName} — {moduleId.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</p>
         </div>
+        {(moduleId === "innovation-directions" || moduleId === "innovation-deepdive") && messages.length > 1 && (
+          <button
+            type="button"
+            onClick={async () => {
+              if (!window.confirm("Clear this chat history? This cannot be undone.")) return;
+              const greeting = moduleId === "innovation-deepdive" && activeDirectionName
+                ? `Welcome to the **Innovation Deep Dive** for ${bizName}!\n\nWe'll now explore each of your 3 confirmed directions in depth with McKinsey-level analysis.\n\nSelect a direction tab on the left. **Which direction would you like to start with?**`
+                : getGreeting(moduleId, bizName, chatLang);
+              setMessages([{ id: "1", role: "coach", text: greeting }]);
+              if (user) {
+                try {
+                  await deleteDoc(doc(db, "users", user.uid, "chats", chatDocId));
+                } catch (e) { /* ignore */ }
+              }
+            }}
+            className="ml-2 p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            title="Clear chat history"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Messages */}
