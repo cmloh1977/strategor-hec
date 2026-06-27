@@ -342,11 +342,20 @@ export default function ChatPane({ moduleId }: { moduleId: string }) {
         text: '🎯 Excellent! Your 3 innovation directions are confirmed. Navigate to **Deep Dive** in the sidebar to develop each direction with strategic depth.'
       }]);
     };
+    const handleInnovationAskAI = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.directionName && detail?.fieldLabel) {
+        const msg = `I'm working on my innovation direction **${detail.directionName}**. Help me think through the **${detail.fieldLabel}** field. What should I consider? Push me to be specific and strategic.`;
+        sendMessageRef.current(msg);
+      }
+    };
     window.addEventListener('innovation-challenge', handleInnovationChallenge);
     window.addEventListener('innovation-confirmed', handleInnovationConfirmed);
+    window.addEventListener('innovation-askai', handleInnovationAskAI);
     return () => {
       window.removeEventListener('innovation-challenge', handleInnovationChallenge);
       window.removeEventListener('innovation-confirmed', handleInnovationConfirmed);
+      window.removeEventListener('innovation-askai', handleInnovationAskAI);
     };
   }, []);
 
